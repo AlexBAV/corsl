@@ -15,4 +15,3 @@
 #include "compatible_base.h"
 #include "async_timer.h"
 #include "advanced_io.h"
-#include "cancel.h"
