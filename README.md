@@ -20,6 +20,15 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 
 ## TOC
 
+* [`srwlock` Class](#srwlock-class)
+* ["Compatible" Versions of Awaitables from `cppwinrt`](#compatible-versions-of-awaitables-from-cppwinrt)
+* [`future<T>`: Light-Weight Awaitable Class](#futuret-light-weight-awaitable-class)
+* [`start` Function](#start-function)
+* [`async_timer` Class](#async_timer-class)
+* [`resumable_io_timeout` Class](#resumable_io_timeout-class)
+* [`when_all` Function](#when_all-function)
+* [`when_any` Function](#when_any-function)
+* [Cancellation Support](#cancellation-support)
 
 ### `srwlock` Class
 
@@ -89,7 +98,7 @@ Using `co_await` or calling `wait()` or `get()` with a default-initialized `futu
 #### Notes
 
 1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller.
-2. Cancellation is not built-in into the `future` class. Use the "external" cancellation as described [later].
+2. Cancellation is not built-in into the `future` class. Use the "external" cancellation as described [later](#cancellation-support).
 
 ### `start` Function
 
@@ -178,6 +187,8 @@ void cancel_wait()
     timer.cancel();
 }
 ```
+
+Another example of `async_timer` usage is provided below in [Cancellation Support](#cancellation-support) section.
 
 ### `resumable_io_timeout` Class
 
@@ -270,4 +281,68 @@ corsl::future<void> coroutine7()
     // The following operation will complete in 10 seconds and produce std::pair<bool, size_t> { true, 0 }
     std::pair<bool, size_t> result = co_await corsl::when_any(bool_timer(10s), bool_timer(20s), bool_timer(30s));
 }
+```
+
+### Cancellation Support
+
+```C++
+#include <corsl/cancel.h>
+```
+
+**Note**: Including `cancel.h` will add dependency on `Boost.Intrusive` header-only library.
+
+Cancellation in `corsl` is provided by means of two classes: `cancellation_token_source` and `cancellation_token`.
+
+An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means.
+
+A coroutine then creates an instance of `cancellation_token` class on its stack, passing it the reference to the source object.
+
+Later coroutine may check the cancellation state of a token by either calling `is_cancelled()` method or casting token to `bool`. Calling `check_cancelled()` method throws `operation_cancelled` exception if the token has been cancelled.
+
+Coroutine may also subscribe to the cancellation event with a callback by calling a `subscribe` method. Callback is automatically unsubscribed when token is destroyed or may be manually unsubscribed by calling `unsubscribe` method.
+
+```C++
+#include <corsl/future.h>
+#include <corsl/async_timer.h>
+#include <corsl/cancel.h>
+
+class server
+{
+    corsl::cancellation_token_source cancel;
+    corsl::future<void> refresh_task;
+
+    void refresh() { ... }
+public:
+    void start()
+    {
+        refresh_task = [this]() -> corsl::future<void>
+        {
+            corsl::cancellation_token token { cancel };
+            corsl::async_timer timer;
+
+            // When cancelled, cancel timer first
+            token.subscribe([&]
+            {
+                timer.cancel();
+            });
+
+            while (!token)
+            {
+                co_await timer.wait(2min);
+                refresh();
+            }
+        }();
+    }
+
+    void stop()
+    {
+        cancel.cancel();
+        try
+        {
+            refresh_task.get();
+        } catch(...)
+        {
+        }
+    }
+};
 ```
