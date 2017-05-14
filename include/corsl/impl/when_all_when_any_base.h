@@ -91,4 +91,6 @@ namespace corsl
 		template<class...T>
 		using get_first_t = typename get_first<T...>::type;
 	}
+
+	using details::no_result;
 }

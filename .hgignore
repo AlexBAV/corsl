@@ -1,0 +1,7 @@
+syntax: glob
+.vs/*
+packages/*
+*/x64/*
+x64/*
+win32/*
+*/win32/*
