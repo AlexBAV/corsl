@@ -281,6 +281,7 @@ namespace corsl
 
 			void wait() noexcept
 			{
+				assert(promise && "Calling get() or wait() for uninitialized future is incorrect");
 				if (promise->status != status_t::running)
 					return;
 

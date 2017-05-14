@@ -156,7 +156,7 @@ namespace corsl
 					{
 						if (m_result == ERROR_OPERATION_ABORTED)
 							m_result = ERROR_TIMEOUT;
-						throw hresult_error(HRESULT_FROM_WIN32(m_result));
+						throw operation_cancelled{};
 					}
 
 					return static_cast<uint32_t>(InternalHigh);
