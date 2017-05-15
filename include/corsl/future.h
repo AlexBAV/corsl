@@ -9,6 +9,7 @@
 
 #include "impl/dependencies.h"
 #include "impl/errors.h"
+#include "srwlock.h"
 
 namespace corsl
 {

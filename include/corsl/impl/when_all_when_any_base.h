@@ -90,6 +90,20 @@ namespace corsl
 
 		template<class...T>
 		using get_first_t = typename get_first<T...>::type;
+
+		template<class...Ts>
+		struct are_all_same
+		{
+			using first_type = get_first_t<Ts...>;
+
+			using type = std::conjunction<std::is_same<first_type, Ts>...>;
+		};
+
+		template<class...Ts>
+		using are_all_same_t = typename are_all_same<Ts...>::type;
+
+		template<class...Ts>
+		constexpr bool are_all_same_v = typename are_all_same<Ts...>::type::value;
 	}
 
 	using details::no_result;
