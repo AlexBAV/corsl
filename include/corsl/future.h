@@ -122,7 +122,7 @@ namespace corsl
 		{
 		protected:
 			template<class T>
-			void iget(T &)
+			void iget(T &) const
 			{
 			}
 		};
@@ -280,7 +280,7 @@ namespace corsl
 				return *this;
 			}
 
-			void wait() noexcept
+			void wait() const noexcept
 			{
 				assert(promise && "Calling get() or wait() for uninitialized future is incorrect");
 				if (promise->status != status_t::running)
@@ -302,10 +302,16 @@ namespace corsl
 				cv.wait_while(x, [&] { return !completed; });
 			}
 
-			decltype(auto) get()
+			decltype(auto) get() const &
 			{
 				wait();
 				return iget(promise->get());
+			}
+
+			decltype(auto) get() &&
+			{
+				wait();
+				return std::move(*this).iget(promise->get());
 			}
 
 			// await
