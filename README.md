@@ -8,7 +8,7 @@ One of the goals of `corsl` library was being able to use it under Windows Vista
 
 Library is header-only and consists of several headers. The only external dependency is `cppwinrt` library. For simplicity, there is header `all.h`, which includes all other headers, except `cancel.h` header.
 
-`cancel.h` header depends on [`Boost.Intrusive`](http://www.boost.org/doc/libs/1_64_0/doc/html/intrusive.html) library and therefore is not included by default. `Boost.Intrusive` is header-only library distributed with `boost`.
+`cancel.h` header additionally depends on [`Boost.Intrusive`](http://www.boost.org/doc/libs/1_64_0/doc/html/intrusive.html) library and therefore is not included by default. `Boost.Intrusive` is a header-only library distributed with `boost`.
 
 ## Compiler Support
 
@@ -24,10 +24,10 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 * ["Compatible" Versions of Awaitables from `cppwinrt`](#compatible-versions-of-awaitables-from-cppwinrt)
 * [`future<T>`: Light-Weight Awaitable Class](#futuret-light-weight-awaitable-class)
 * [`start` Function](#start-function)
-* [`async_timer` Class](#async_timer-class)
-* [`resumable_io_timeout` Class](#resumable_io_timeout-class)
-* [`when_all` Function](#when_all-function)
-* [`when_any` Function](#when_any-function)
+* [`async_timer` Class](#asynctimer-class)
+* [`resumable_io_timeout` Class](#resumableiotimeout-class)
+* [`when_all` Function](#whenall-function)
+* [`when_any` Function](#whenany-function)
 * [Cancellation Support](#cancellation-support)
 
 ### `srwlock` Class
@@ -36,11 +36,11 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 #include <corsl/srwlock.h>
 ```
 
-`std::mutex` and other mutual exclusion classes from Standard Library often cannot be used in coroutines. This is because according to Standard mutex must be acquired and released by the same thread. This is not a case for a coroutine as parts of a coroutine are often executed by different threads.
+`std::mutex` and other mutual exclusion classes from Standard Library often cannot be used in coroutines. This is because according to Standard mutex must be released by the same thread that acquired it. This is not a case for a coroutine as parts of a coroutine are often executed by different threads.
 
 `cppwinrt` has a `srwlock` class, but, unfortunately, it does not follow the standard "interface" of STL `mutex`.
 
-`corsl::srwlock` is compatible with `std::shared_mutex` class and, therefore, may be used with lock adapters like `std::lock_guard<T>` and `std::unique_lock<T>`.
+`corsl::srwlock` is compatible with `std::shared_mutex` class and, therefore, may be used with lock adapters like `std::lock_guard<T>`, `std::unique_lock<T>` and `std::shared_lock<T>`.
 
 ### "Compatible" Versions of Awaitables from `cppwinrt`
 
@@ -89,7 +89,7 @@ corsl::future<void> coroutine1()
 
 `corsl` introduces a light-weight awaitable class `future<T>`. It may be used as a return type for any coroutine. `T` should be `void` for coroutines returning `void`. `T` cannot be a reference type.
 
-`future<T>` may be copied and moved. Using `co_await` on a future suspends the current context until the coroutine produces a result. `co_await` then produces the result or re-throws an exception.
+`future<T>` may be copied and moved. Using `co_await` on a future suspends the current context until the coroutine produces a result. `co_await` expression then produces the result or re-throws an exception.
 
 `future<T>` provides a blocking `get()` method. If coroutine throws an exception, it is re-thrown in `get()` method. It also provides a blocking `wait()` method. It returns only when coroutine is finished and does not throw any exceptions.
 
@@ -97,7 +97,7 @@ Using `co_await` or calling `wait()` or `get()` with a default-initialized `futu
 
 #### Notes
 
-1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller.
+1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case co_await is applied to a rvalue reference (or temporary).
 2. Cancellation is not built-in into the `future` class. Use the "external" cancellation as described [later](#cancellation-support).
 
 ### `start` Function
@@ -237,13 +237,13 @@ corsl::future<void> void_timer(TimeSpan duration)
     co_await duration;
 }
 
-corsl::async_operation<bool> bool_timer(TimeSpan duration)
+corsl::future<bool> bool_timer(TimeSpan duration)
 {
     co_await duration;
     co_return true;
 }
 
-corsl::async_operation<int> int_timer(TimeSpan duration)
+corsl::future<int> int_timer(TimeSpan duration)
 {
     co_await duration;
     co_return 10;
@@ -295,9 +295,9 @@ Cancellation in `corsl` is provided by means of two classes: `cancellation_token
 
 An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means.
 
-A coroutine then creates an instance of `cancellation_token` class on its stack, passing it the reference to the source object.
+A coroutine then creates an instance of `cancellation_token` class on its stack, passing it the reference to the source object. **Note**: `cancellation_token` must only be constructed on coroutine stack, all other uses lead to undefined behavior.
 
-Later coroutine may check the cancellation state of a token by either calling `is_cancelled()` method or casting token to `bool`. Calling `check_cancelled()` method throws `operation_cancelled` exception if the token has been cancelled.
+A coroutine may check cancellation state of a token by either calling token's `is_cancelled()` method or casting a token to `bool`. Calling `check_cancelled()` method throws `operation_cancelled` exception if the token has been cancelled.
 
 Coroutine may also subscribe to the cancellation event with a callback by calling a `subscribe` method. Callback is automatically unsubscribed when token is destroyed or may be manually unsubscribed by calling `unsubscribe` method.
 
