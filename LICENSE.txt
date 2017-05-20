@@ -1,4 +1,4 @@
-cppwinrt_ex
+corsl - Coroutine Support Library
 The MIT License (MIT)
 
 Copyright (c) HHD Software Ltd.

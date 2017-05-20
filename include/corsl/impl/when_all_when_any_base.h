@@ -1,4 +1,5 @@
 //-------------------------------------------------------------------------------------------------------
+// corsl - Coroutine Support Library
 // Copyright (C) 2017 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
@@ -48,7 +49,7 @@ namespace corsl
 		template<class T>
 		constexpr bool has_await_resume_v = has_await_resume<T>::value;
 
-		// "external" cae
+		// "external" case
 		template<class, class = std::void_t<>>
 		struct has_external_await_resume : std::false_type {};
 

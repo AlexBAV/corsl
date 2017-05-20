@@ -1,4 +1,5 @@
 //-------------------------------------------------------------------------------------------------------
+// corsl - Coroutine Support Library
 // Copyright (C) 2017 HHD Software Ltd.
 // Written by Alexander Bessonov
 //

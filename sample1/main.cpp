@@ -1,4 +1,5 @@
 //-------------------------------------------------------------------------------------------------------
+// corsl - Coroutine Support Library
 // Copyright (C) 2017 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
@@ -14,11 +15,8 @@
 #include <future>
 #include <sstream>
 
-using namespace corsl::timer;
-
-//#pragma comment(lib, "windowsapp")
-
 using namespace std::chrono_literals;
+using namespace corsl::timer;
 
 const auto first_timer_duration = 3s;
 const auto second_timer_duration = 5s;
@@ -38,7 +36,7 @@ corsl::future<bool> bool_timer(winrt::Windows::Foundation::TimeSpan duration)
 corsl::future<int> int_timer(winrt::Windows::Foundation::TimeSpan duration)
 {
 	co_await duration;
-	co_return 10;
+	co_return 42;
 }
 
 corsl::future<void> test_when_all_void()
