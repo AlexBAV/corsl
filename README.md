@@ -231,6 +231,8 @@ Every input parameter must either be `IAsyncAction`, `IAsyncOperation<T>`, `futu
 
 If all input tasks produce `void`, `when_all` also produces `void`, otherwise, it produces an `std::tuple<>` of all input parameter types. For `void` tasks, an empty type `corsl::no_result` is used in the tuple.
 
+When the list of tasks to await is not known at compile time, `when_all_range` function must be used instead. It takes a pair of iterators to a range of tasks. In this case, all tasks must be of the same type. `when_all_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies task objects during its execution.
+
 ```C++
 corsl::future<void> void_timer(TimeSpan duration)
 {
@@ -270,7 +272,9 @@ All input parameters must be `IAsyncAction`, `IAsyncOperation<T>`, `future<T>` o
 
 `when_any` **does not cancel any non-completed tasks.** When other tasks complete, their results are silently discarded. `when_any` makes sure the control block does not get destroyed until all tasks complete.
 
-If all input tasks produce no result, `when_any` produces the index to the first completed task. Otherwise, it produces `std::pair<T, size_t>`, where the first result is the result of completed task and second is an index of completed task:
+If all input tasks produce no result, `when_any` produces the index to the first completed task. Otherwise, it produces `std::pair<T, size_t>`, where the first result is the result of completed task and second is an index of completed task.
+
+When the list of tasks to await is not known at compile time, `when_any_range` function must be used instead. It takes a pair of iterators to a range of tasks. `when_any_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies task objects during its execution.
 
 ```C++
 corsl::future<void> coroutine7()
@@ -293,9 +297,14 @@ corsl::future<void> coroutine7()
 
 Cancellation in `corsl` is provided by means of two classes: `cancellation_token_source` and `cancellation_token`.
 
-An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means.
+An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means. To cancel any coroutine that "depends" on this token source, its `cancel()` method should be called. This method returns immediately. If the caller needs to block until the actual cancellation occurs, it should call `future<T>::get()` or `future<T>::wait()` methods after cancelling a token source object.
 
-A coroutine then creates an instance of `cancellation_token` class on its stack, passing it the reference to the source object. **Note**: `cancellation_token` must only be constructed on coroutine stack, all other uses lead to undefined behavior.
+A coroutine that supports cancellation needs to create an instance of `cancellation_token` class on its stack, passing it the reference to the source object.
+
+**Notes**:
+
+* `cancellation_token` must only be constructed on coroutine stack, all other uses lead to undefined behavior.
+* Lifetime of `cancellation_token_source` object is not related to lifetime of any coroutine that references it. It acts as a smart pointer and may be copied and moved very cheap.
 
 A coroutine may check cancellation state of a token by either calling token's `is_cancelled()` method or casting a token to `bool`. Calling `check_cancelled()` method throws `operation_cancelled` exception if the token has been cancelled.
 
