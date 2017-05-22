@@ -29,7 +29,7 @@ namespace corsl
 			srwlock lock;
 			std::experimental::coroutine_handle<> resume{};
 			std::exception_ptr exception;
-			std::atomic<int> use_count{ 1 };
+			std::atomic<int> use_count{ 0 };
 
 			status_t status{ status_t::running };
 
@@ -129,86 +129,94 @@ namespace corsl
 		};
 
 		template<class T>
+		class future;
+
+		template<class T>
+		struct promise_type_ : promise_base<T>
+		{
+			srwlock lock;
+			std::experimental::coroutine_handle<> destroy_resume{};
+			bool future_exists{ true };
+
+			//
+			bool start_async(std::experimental::coroutine_handle<> resume_) noexcept
+			{
+				const std::lock_guard<srwlock> l(lock);
+				if (is_ready())
+					return false;	// we already have a result
+				resume = resume_;
+				return true;
+			}
+
+			static std::experimental::suspend_never initial_suspend() noexcept
+			{
+				return {};
+			}
+
+			auto final_suspend() noexcept
+			{
+				struct awaiter
+				{
+					promise_type_ *pthis;
+
+					bool await_ready() const noexcept
+					{
+						pthis->lock.lock();
+						auto is_ready = !pthis->future_exists;
+						if (is_ready)
+							pthis->lock.unlock();
+						return is_ready;
+					}
+
+					void await_suspend(std::experimental::coroutine_handle<> resume_) noexcept
+					{
+						pthis->destroy_resume = resume_;
+						pthis->lock.unlock();
+					}
+
+					static void await_resume() noexcept
+					{
+					}
+				};
+				return awaiter{ this };
+			}
+
+			future<T> get_return_object() noexcept
+			{
+				add_ref();
+				return { this };
+			}
+
+			void add_ref() noexcept
+			{
+				use_count.fetch_add(1, std::memory_order_relaxed);
+			}
+
+			void release() noexcept
+			{
+				if (1 == use_count.fetch_sub(1, std::memory_order_relaxed))
+					destroy();
+			}
+
+			void destroy() noexcept
+			{
+				std::unique_lock<srwlock> l(lock);
+				future_exists = false;
+				if (destroy_resume)
+				{
+					l.unlock();
+					destroy_resume.destroy();
+				}
+			}
+		};
+
+		template<class T>
 		class future : public future_base<T>
 		{
+			friend struct promise_type_<T>;
 			static_assert(!std::is_reference_v<T>, "future<T> is not allowed for reference types");
-			struct promise_type_ : promise_base<T>
-			{
-				srwlock lock;
-				std::experimental::coroutine_handle<> destroy_resume{};
-				bool future_exists{ true };
 
-				//
-				bool start_async(std::experimental::coroutine_handle<> resume_) noexcept
-				{
-					const std::lock_guard<srwlock> l(lock);
-					if (is_ready())
-						return false;	// we already have a result
-					resume = resume_;
-					return true;
-				}
-
-				static std::experimental::suspend_never initial_suspend() noexcept
-				{
-					return {};
-				}
-
-				auto final_suspend() noexcept
-				{
-					struct awaiter
-					{
-						promise_type_ *pthis;
-
-						bool await_ready() const noexcept
-						{
-							pthis->lock.lock();
-							auto is_ready = !pthis->future_exists;
-							if (is_ready)
-								pthis->lock.unlock();
-							return is_ready;
-						}
-
-						void await_suspend(std::experimental::coroutine_handle<> resume_) noexcept
-						{
-							pthis->destroy_resume = resume_;
-							pthis->lock.unlock();
-						}
-
-						static void await_resume() noexcept
-						{
-						}
-					};
-					return awaiter{ this };
-				}
-
-				future<T> get_return_object() noexcept
-				{
-					return { this };
-				}
-
-				void add_ref() noexcept
-				{
-					use_count.fetch_add(1, std::memory_order_relaxed);
-				}
-
-				void release() noexcept
-				{
-					if (1 == use_count.fetch_sub(1, std::memory_order_relaxed))
-						destroy();
-				}
-
-				void destroy() noexcept
-				{
-					std::unique_lock<srwlock> l(lock);
-					future_exists = false;
-					if (destroy_resume)
-					{
-						l.unlock();
-						destroy_resume.destroy();
-					}
-				}
-			};
-
+			using promise_type_ = promise_type_<T>;
 			promise_type_ *promise;
 
 			future(promise_type_ *promise) noexcept :

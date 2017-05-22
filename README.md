@@ -23,11 +23,13 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 * [`srwlock` Class](#srwlock-class)
 * ["Compatible" Versions of Awaitables from `cppwinrt`](#compatible-versions-of-awaitables-from-cppwinrt)
 * [`future<T>`: Light-Weight Awaitable Class](#futuret-light-weight-awaitable-class)
+* [`promise<T>`: Asynchronous Promise Type](#promiset-asynchronous-promise-type)
 * [`start` Function](#start-function)
 * [`async_timer` Class](#asynctimer-class)
 * [`resumable_io_timeout` Class](#resumableiotimeout-class)
 * [`when_all` Function](#whenall-function)
 * [`when_any` Function](#whenany-function)
+* [`async_queue` Class](#asyncqueue-class)
 * [Cancellation Support](#cancellation-support)
 
 ### `srwlock` Class
@@ -91,14 +93,40 @@ corsl::future<void> coroutine1()
 
 `future<T>` may be copied and moved. Using `co_await` on a future suspends the current context until the coroutine produces a result. `co_await` expression then produces the result or re-throws an exception.
 
-`future<T>` provides a blocking `get()` method. If coroutine throws an exception, it is re-thrown in `get()` method. It also provides a blocking `wait()` method. It returns only when coroutine is finished and does not throw any exceptions.
+`future<T>` provides a blocking `get` method. If coroutine throws an exception, it is re-thrown in `get` method. It also provides a blocking `wait` method. It returns only when coroutine is finished and does not throw any exceptions.
 
-Using `co_await` or calling `wait()` or `get()` with a default-initialized `future` triggers an assertion.
+Using `co_await` or calling `wait` or `get` with a default-initialized `future` triggers an assertion.
 
 #### Notes
 
 1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case co_await is applied to a rvalue reference (or temporary).
 2. Cancellation is not built-in into the `future` class. Use the "external" cancellation as described [later](#cancellation-support).
+
+### `promise<T>`: Asynchronous Promise Type
+
+```C++
+#include <corsl/promise.h>
+```
+
+PPL provides `task_completion_event` class that may be used to perform late completion of tasks. `corsl` provides similar functionality with a help of its `promise<T>` class. `T` is a promise result type or `void`. Reference types are not allowed.
+
+After construction, a related future object may be created by calling `get_future` method. When the operation result is received, `set` method is called to set the promise value or `set_exception` if exception has occurred. Corresponding future object is then completed and the result (or exception) is propagated to the continuation.
+
+```C++
+#include <corsl/promise.h>
+
+corsl::promise<void> promise;
+
+corsl::future<void> start_async_operation()
+{
+    return promise.get_future();
+}
+
+void complete_async_operation()
+{
+    promise.set();
+}
+```
 
 ### `start` Function
 
@@ -287,6 +315,47 @@ corsl::future<void> coroutine7()
 }
 ```
 
+### `async_queue` Class
+
+```C++
+#include <corsl/async_queue.h>
+```
+
+`async_queue<T>` is an awaitable producer-consumer queue. Producer adds values to the queue by calling `push` or `emplace` methods while consumer calls `next` method to get an awaitable that produces the result from the head of a queue.
+
+**Note**: While multiple producers are allowed to add values to a queue concurrently (actual access is synchronized with a lock), only single consumer is supported. Calling `next` from multiple coroutines or threads will lead to undefined behavior.
+
+```C++
+#include <corsl/async_queue.h>
+#include <corsl/future.h>
+#include <corsl/compatible_base.h>
+
+using namespace std::chrono_literals;
+using namespace corsl::timer;
+
+corsl::async_queue<int> queue;
+
+corsl::future<void> test_async_queue_producer()
+{
+	co_await 2s;
+	queue.push(17);
+	co_await 1s;
+	queue.push(23);
+	co_await 2s;
+	queue.push(42);
+}
+
+corsl::future<void> test_async_queue_consumer()
+{
+	int value;
+	do
+	{
+		value = co_await queue.next();
+		std::wcout << value << L" received from async queue\n";
+	} while (value != 42);
+}
+```
+
 ### Cancellation Support
 
 ```C++
@@ -297,7 +366,7 @@ corsl::future<void> coroutine7()
 
 Cancellation in `corsl` is provided by means of two classes: `cancellation_token_source` and `cancellation_token`.
 
-An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means. To cancel any coroutine that "depends" on this token source, its `cancel()` method should be called. This method returns immediately. If the caller needs to block until the actual cancellation occurs, it should call `future<T>::get()` or `future<T>::wait()` methods after cancelling a token source object.
+An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means. To cancel any coroutine that "depends" on this token source, its `cancel` method should be called. This method returns immediately. If the caller needs to block until the actual cancellation occurs, it should call `future<T>::get` or `future<T>::wait` methods after cancelling a token source object.
 
 A coroutine that supports cancellation needs to create an instance of `cancellation_token` class on its stack, passing it the reference to the source object.
 
@@ -306,7 +375,7 @@ A coroutine that supports cancellation needs to create an instance of `cancellat
 * `cancellation_token` must only be constructed on coroutine stack, all other uses lead to undefined behavior.
 * Lifetime of `cancellation_token_source` object is not related to lifetime of any coroutine that references it. It acts as a smart pointer and may be copied and moved very cheap.
 
-A coroutine may check cancellation state of a token by either calling token's `is_cancelled()` method or casting a token to `bool`. Calling `check_cancelled()` method throws `operation_cancelled` exception if the token has been cancelled.
+A coroutine may check cancellation state of a token by either calling token's `is_cancelled` method or casting a token to `bool`. Calling `check_cancelled` method throws `operation_cancelled` exception if the token has been cancelled.
 
 Coroutine may also subscribe to the cancellation event with a callback by calling a `subscribe` method. Callback is automatically unsubscribed when token is destroyed or may be manually unsubscribed by calling `unsubscribe` method.
 
@@ -355,3 +424,4 @@ public:
     }
 };
 ```
+

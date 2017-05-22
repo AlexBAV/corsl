@@ -42,7 +42,7 @@ namespace corsl
 		};
 
 		// The following resumeables are copied from winrt namespace but use
-		// winrt_ex::hresult_error
+		// corsl::hresult_error
 		// which allows them to be used in Vista+
 
 		struct resume_after

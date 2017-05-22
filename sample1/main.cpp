@@ -149,6 +149,28 @@ corsl::future<void> test_async_timer()
 	}
 }
 
+corsl::async_queue<int> queue;
+
+corsl::future<void> test_async_queue_producer()
+{
+	co_await 2s;
+	queue.push(17);
+	co_await 1s;
+	queue.push(23);
+	co_await 2s;
+	queue.push(42);
+}
+
+corsl::future<void> test_async_queue_consumer()
+{
+	int value;
+	do
+	{
+		value = co_await queue.next();
+		std::wcout << value << L" received from async queue\n";
+	} while (value != 42);
+}
+
 template<class F>
 void measure(const wchar_t *name, const F &f)
 {
@@ -209,12 +231,36 @@ void concurrent_test()
 			measure_async(L"test when_all_bool_range", [] { return test_when_all_bool_range(); }),
 			measure_async(L"test when_any_void_range", [] { return test_when_any_void_range(); }),
 			measure_async(L"test when_any_bool_range", [] { return test_when_any_bool_range(); })
-		)
+			)
 	).get();
+}
+
+corsl::future<void> promise_test_start(corsl::promise<void> &promise)
+{
+	return promise.get_future();
+}
+
+void promise_test_complete(corsl::promise<void> &promise)
+{
+	promise.set();
 }
 
 int main()
 {
+	{
+		corsl::promise<void> promise;
+
+		auto ptest = promise_test_start(promise);
+		promise_test_complete(promise);
+		ptest.wait();
+	}
 	sequential_test();
 	concurrent_test();
+
+	corsl::start(
+		corsl::when_all(
+			test_async_queue_producer(),
+			test_async_queue_consumer()
+		)
+	).wait();
 }
