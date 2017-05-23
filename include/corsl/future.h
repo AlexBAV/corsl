@@ -33,7 +33,7 @@ namespace corsl
 
 			status_t status{ status_t::running };
 
-			bool is_ready() const noexcept
+			bool is_ready([[maybe_unused]] std::unique_lock<srwlock> &l) const noexcept
 			{
 				return status != status_t::running;
 			}
@@ -49,7 +49,7 @@ namespace corsl
 
 			void set_exception(std::exception_ptr exception_) noexcept
 			{
-				std::unique_lock<srwlock> l(lock);
+				std::unique_lock<srwlock> l{ lock };
 				exception = exception_;
 				status = status_t::exception;
 				check_resume(std::move(l));
@@ -70,7 +70,7 @@ namespace corsl
 			template<class V>
 			void return_value(V &&v) noexcept
 			{
-				std::unique_lock<srwlock> l(lock);
+				std::unique_lock<srwlock> l{ lock };
 				value = std::forward<V>(v);
 				status = status_t::ready;
 				check_resume(std::move(l));
@@ -91,7 +91,7 @@ namespace corsl
 
 			void return_void() noexcept
 			{
-				std::unique_lock<srwlock> l(lock);
+				std::unique_lock<srwlock> l{ lock };
 				status = status_t::ready;
 				check_resume(std::move(l));
 			}
@@ -134,16 +134,15 @@ namespace corsl
 		template<class T>
 		struct promise_type_ : promise_base<T>
 		{
-			srwlock lock;
 			std::experimental::coroutine_handle<> destroy_resume{};
 			bool future_exists{ true };
 
 			//
-			bool start_async(std::experimental::coroutine_handle<> resume_) noexcept
+			bool start_async(std::experimental::coroutine_handle<> resume_, std::unique_lock<srwlock> &&l) noexcept
 			{
-				const std::lock_guard<srwlock> l(lock);
-				if (is_ready())
+				if (is_ready(l))
 					return false;	// we already have a result
+				assert(!resume && "future cannot be awaited multiple times");
 				resume = resume_;
 				return true;
 			}
@@ -200,7 +199,7 @@ namespace corsl
 
 			void destroy() noexcept
 			{
-				std::unique_lock<srwlock> l(lock);
+				std::unique_lock<srwlock> l{ lock };
 				future_exists = false;
 				if (destroy_resume)
 				{
@@ -229,12 +228,17 @@ namespace corsl
 
 				bool await_ready() const noexcept
 				{
-					return promise->is_ready();
+					std::unique_lock<srwlock> l{ promise->lock };
+					auto ready = promise->is_ready(l);
+					if (!ready)
+						l.release();
+					return ready;
 				}
 
 				bool await_suspend(std::experimental::coroutine_handle<> resume) noexcept
 				{
-					return promise->start_async(resume);
+					std::unique_lock<srwlock> l{ promise->lock, std::adopt_lock };
+					return promise->start_async(resume, std::move(l));
 				}
 
 				void await_resume() noexcept
@@ -292,8 +296,11 @@ namespace corsl
 			void wait() const noexcept
 			{
 				assert(promise && "Calling get() or wait() for uninitialized future is incorrect");
-				if (promise->status != status_t::running)
-					return;
+				{
+					std::unique_lock<srwlock> l{ promise->lock };
+					if (promise->is_ready(l))
+						return;
+				}
 
 				winrt::impl::lock x;
 				winrt::impl::condition_variable cv;
@@ -327,12 +334,17 @@ namespace corsl
 			bool await_ready() const noexcept
 			{
 				assert(promise && "co_await with uninitialized future is invalid");
-				return promise->is_ready();
+				std::unique_lock<srwlock> l{ promise->lock };
+				auto ready = promise->is_ready(l);
+				if (!ready)
+					l.release();
+				return ready;
 			}
 
 			bool await_suspend(std::experimental::coroutine_handle<> resume) noexcept
 			{
-				return promise->start_async(resume);
+				std::unique_lock<srwlock> l{ promise->lock, std::adopt_lock };
+				return promise->start_async(resume, std::move(l));
 			}
 
 			void iawait_resume(std::true_type)
