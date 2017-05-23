@@ -33,7 +33,7 @@ namespace corsl
 
 			status_t status{ status_t::running };
 
-			bool is_ready([[maybe_unused]] std::unique_lock<srwlock> &l) const noexcept
+			bool is_ready(std::unique_lock<srwlock> &) const noexcept
 			{
 				return status != status_t::running;
 			}
