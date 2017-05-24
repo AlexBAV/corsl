@@ -185,6 +185,22 @@ corsl::future<void> coroutine3()
 }
 ```
 
+In addition to `start`, `block_get` and `block_wait` functions are provided:
+
+```C++
+template<class Awaitable>
+inline auto block_get(Awaitable &&awaitable)
+{
+    return start(std::forward<Awaitable>(awaitable)).get();
+}
+
+template<class Awaitable>
+inline void block_wait(Awaitable &&awaitable) noexcept
+{
+    start(std::forward<Awaitable>(awaitable)).wait();
+}
+```
+
 ### `async_timer` Class
 
 ```C++

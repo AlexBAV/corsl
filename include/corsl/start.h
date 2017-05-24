@@ -34,6 +34,20 @@ namespace corsl
 		{
 			return istart(get_result_type(awaitable), std::forward<Awaitable>(awaitable));
 		}
+
+		template<class Awaitable>
+		inline auto block_get(Awaitable &&awaitable)
+		{
+			return start(std::forward<Awaitable>(awaitable)).get();
+		}
+
+		template<class Awaitable>
+		inline void block_wait(Awaitable &&awaitable) noexcept
+		{
+			start(std::forward<Awaitable>(awaitable)).wait();
+		}
 	}
 	using details::start;
+	using details::block_get;
+	using details::block_wait;
 }
