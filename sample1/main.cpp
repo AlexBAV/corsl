@@ -245,6 +245,31 @@ void promise_test_complete(corsl::promise<void> &promise)
 	promise.set();
 }
 
+void test_shared_future()
+{
+	corsl::promise<int> promise;
+	corsl::shared_future<int> shared_future{ promise.get_future() };
+
+	auto event = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+	std::atomic<int> counter{ 0 };
+
+	for (int i = 0; i < 10; ++i)
+	{
+		[&](int i) -> winrt::fire_and_forget
+		{
+			using namespace std::string_literals;
+			co_await corsl::resume_background{};
+			std::wcout << (std::to_wstring(i + 1) + L". shared_future await completed with result "s + std::to_wstring(co_await shared_future) + L"\n"s);
+			if (counter.fetch_add(1, std::memory_order_relaxed) == 9)
+				SetEvent(event);
+		}(i);
+	}
+
+	promise.set(42);
+	corsl::block_wait(corsl::resume_on_signal{ event });
+	CloseHandle(event);
+}
+
 int main()
 {
 	{
@@ -254,13 +279,16 @@ int main()
 		promise_test_complete(promise);
 		ptest.wait();
 	}
+
+	test_shared_future();
+
 	sequential_test();
 	concurrent_test();
 
-	corsl::start(
+	corsl::block_wait(
 		corsl::when_all(
 			test_async_queue_producer(),
 			test_async_queue_consumer()
 		)
-	).wait();
+	);
 }

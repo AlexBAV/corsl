@@ -10,6 +10,7 @@
 
 #include "srwlock.h"
 #include "future.h"
+#include "shared_future.h"
 #include "start.h"
 #include "when_all.h"
 #include "when_any.h"

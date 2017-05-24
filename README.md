@@ -23,6 +23,7 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 * [`srwlock` Class](#srwlock-class)
 * ["Compatible" Versions of Awaitables from `cppwinrt`](#compatible-versions-of-awaitables-from-cppwinrt)
 * [`future<T>`: Light-Weight Awaitable Class](#futuret-light-weight-awaitable-class)
+* [`shared_future<T>` Class](#sharedfuturet-class)
 * [`promise<T>`: Asynchronous Promise Type](#promiset-asynchronous-promise-type)
 * [`start` Function](#start-function)
 * [`async_timer` Class](#asynctimer-class)
@@ -101,6 +102,44 @@ Using `co_await` or calling `wait` or `get` with a default-initialized `future` 
 
 1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case co_await is applied to a rvalue reference (or temporary).
 2. Cancellation is not built-in into the `future` class. Use the "external" cancellation as described [later](#cancellation-support).
+
+### `shared_future<T>` Class
+
+```C++
+#include <corsl/shared_future.h>
+```
+
+`future<T>` class allows only a single continuation to be scheduled on operation completion. That means that only one thread or coroutine is allowed to `co_await` the future.
+
+If multiple continuations are required, an instance of `shared_future<T>` must be constructed from a `future<T>`. It allows any number of callers to `co_await` shared future.
+
+```C++
+#include <corsl/shared_future.h>
+#include <corsl/future.h>
+#include <corsl/compatible_base.h>
+
+corsl::promise<int> promise;
+corsl::shared_future<int> shared_future{ promise.get_future() };
+
+auto event = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+std::atomic<int> counter{ 0 };
+
+for (int i = 0; i < 10; ++i)
+{
+    [&](int i) -> winrt::fire_and_forget
+    {
+        using namespace std::string_literals;
+        co_await corsl::resume_background{};
+        std::wcout << (std::to_wstring(i + 1) + L". shared_future await completed with result "s + std::to_wstring(co_await shared_future) + L"\n"s);
+        if (counter.fetch_add(1, std::memory_order_relaxed) == 9)
+            SetEvent(event);
+    }(i);
+}
+
+promise.set(42);
+corsl::block_wait(corsl::resume_on_signal{ event });
+CloseHandle(event);
+```
 
 ### `promise<T>`: Asynchronous Promise Type
 
