@@ -248,6 +248,7 @@ namespace corsl
 
 		public:
 			using promise_type = promise_type_;
+			using result_type = T;
 
 			future() noexcept :
 			promise{ nullptr }
@@ -362,8 +363,20 @@ namespace corsl
 				return iawait_resume(std::is_same<T, void>{});
 			}
 		};
+
+		template<class F>
+		struct is_future : std::false_type
+		{};
+
+		template<class T>
+		struct is_future<future<T>> : std::true_type
+		{};
+
+		template<class T>
+		constexpr bool is_future_v = is_future<T>::value;
 	}
 
 	using details::future;
+	using details::is_future;
+	using details::is_future_v;
 }
-
