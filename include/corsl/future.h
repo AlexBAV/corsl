@@ -209,7 +209,7 @@ namespace corsl
 			}
 		};
 
-		template<class T>
+		template<class T = void>
 		class future : public future_base<T>
 		{
 			friend struct promise_type_<T>;
