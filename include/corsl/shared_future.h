@@ -15,7 +15,7 @@ namespace corsl
 {
 	namespace details
 	{
-		template<class T>
+		template<class T = void>
 		class shared_future
 		{
 			enum class mode
@@ -77,7 +77,7 @@ namespace corsl
 				return false;
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> resume) noexcept
+			void await_suspend(std::experimental::coroutine_handle<> resume)
 			{
 				std::unique_lock<srwlock> l{ lock, std::adopt_lock };
 				continuations.emplace_back(resume);
