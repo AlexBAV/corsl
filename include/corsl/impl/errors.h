@@ -63,6 +63,11 @@ namespace corsl
 			throw hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
 		}
 
+		[[noreturn]] inline void throw_error(HRESULT hr)
+		{
+			throw hresult_error{ hr };
+		}
+
 		class timer_cancelled : public operation_cancelled
 		{
 		};
@@ -71,4 +76,7 @@ namespace corsl
 	using details::hresult_error;
 	using details::operation_cancelled;
 	using details::timer_cancelled;
+
+	using details::throw_error;
+	using details::throw_last_error;
 }

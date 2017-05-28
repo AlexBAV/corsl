@@ -15,8 +15,8 @@ namespace corsl
 {
 	namespace details
 	{
-		template<class T = void>
-		class shared_future
+		template<class T>
+		class shared_future_impl
 		{
 			enum class mode
 			{
@@ -50,16 +50,16 @@ namespace corsl
 			}
 
 		public:
-			shared_future(future<T> &&future_) noexcept :
+			shared_future_impl(future<T> &&future_) noexcept :
 				future_{ std::move(future_) }
 			{
 			}
 
-			shared_future(const shared_future &) = delete;
-			shared_future &operator =(const shared_future &) = delete;
+			shared_future_impl(const shared_future_impl &) = delete;
+			shared_future_impl &operator =(const shared_future_impl &) = delete;
 
-			shared_future(shared_future &&) = default;
-			shared_future &operator =(shared_future &&) = default;
+			shared_future_impl(shared_future_impl &&) = delete;
+			shared_future_impl &operator =(shared_future_impl &&) = delete;
 
 			bool await_ready() noexcept
 			{
@@ -86,6 +86,32 @@ namespace corsl
 			auto await_resume()
 			{
 				return future_.get();
+			}
+		};
+
+		template<class T>
+		class shared_future
+		{
+			std::shared_ptr<shared_future_impl<T>> pimpl;
+
+		public:
+			shared_future(future<T> &&future) :
+				pimpl{ std::make_shared<shared_future_impl<T>>(std::move(future)) }
+			{}
+
+			bool await_ready() const noexcept
+			{
+				return pimpl->await_ready();
+			}
+
+			void await_suspend(std::experimental::coroutine_handle<> resume) const
+			{
+				pimpl->await_suspend(resume);
+			}
+
+			auto await_resume() const
+			{
+				return pimpl->await_resume();
 			}
 		};
 	}

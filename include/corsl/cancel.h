@@ -24,13 +24,23 @@ namespace corsl
 		class cancellation_token_source_body;
 		class cancellation_token_source;
 
+		struct subscription_id
+		{
+			int id{};
+
+			explicit operator bool()const noexcept
+			{
+				return id != 0;
+			}
+		};
+
 		class cancellation_token : public bi::list_base_hook<>
 		{
 			friend class cancellation_token_source_body;
 			std::shared_ptr<cancellation_token_source_body> body;
 			std::unordered_map<int, std::function<void()>> callbacks;
 			srwlock lock;
-			int last_id{ 0 };
+			int last_id{ 1 };
 			bool cancelled;
 
 			//
@@ -76,26 +86,28 @@ namespace corsl
 			}
 
 			template<class F>
-			int subscribe(F &&f)
+			subscription_id subscribe(F &&f)
 			{
 				std::lock_guard<srwlock> l(lock);
 				callbacks.emplace(last_id, std::forward<F>(f));
-				return last_id++;
+				return { last_id++ };
 			}
 
-			void unsubscribe(int handle)
+			void unsubscribe(subscription_id handle)
 			{
 				std::lock_guard<srwlock> l(lock);
-				callbacks.erase(handle);
+				callbacks.erase(handle.id);
 			}
 		};
 
 		class cancellation_token_source_body
 		{
 			friend class cancellation_token;
+			friend class cancellation_token_source;
 
 			srwlock lock;
 			bi::list<cancellation_token, bi::constant_time_size<false>> tokens;
+			std::vector<std::weak_ptr<cancellation_token_source_body>> related_sources;
 			bool cancelled{ false };
 
 			void add_token(cancellation_token &token) noexcept
@@ -108,6 +120,12 @@ namespace corsl
 			{
 				std::lock_guard<srwlock> l(lock);
 				tokens.erase(tokens.s_iterator_to(token));
+			}
+
+			void add_related(std::shared_ptr<cancellation_token_source_body> &related)
+			{
+				std::lock_guard<srwlock> l(lock);
+				related_sources.emplace_back(related);
 			}
 
 		public:
@@ -124,6 +142,13 @@ namespace corsl
 					cancelled = true;
 					for (auto &token : tokens)
 						token.cancel();
+					for (auto &related : related_sources)
+					{
+						auto pr = related.lock();
+						if (pr)
+							pr->cancel();
+					}
+					related_sources.clear();
 				}
 			}
 		};
@@ -133,10 +158,24 @@ namespace corsl
 			friend class cancellation_token;
 			std::shared_ptr<cancellation_token_source_body> body{ std::make_shared<cancellation_token_source_body>() };
 
+			struct internal_t {};
+
+			cancellation_token_source(internal_t, cancellation_token_source_body *parent)
+			{
+				parent->add_related(body);
+			}
+
 		public:
-			void cancel() noexcept
+			cancellation_token_source() = default;
+
+			void cancel() const noexcept
 			{
 				body->cancel();
+			}
+
+			cancellation_token_source create_connected_source() const
+			{
+				return { internal_t{}, body.get() };
 			}
 		};
 
@@ -156,4 +195,5 @@ namespace corsl
 
 	using details::cancellation_token_source;
 	using details::cancellation_token;
+	using details::subscription_id;
 }

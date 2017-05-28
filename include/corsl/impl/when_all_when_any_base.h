@@ -92,12 +92,21 @@ namespace corsl
 		template<class...T>
 		using get_first_t = typename get_first<T...>::type;
 
+		template<class RT>
+		struct pure_result_type
+		{
+			using type = result_type<std::decay_t<typename RT::type>>;
+		};
+
+		template<class RT>
+		using pure_result_type_t = typename pure_result_type<RT>::type;
+
 		template<class...Ts>
 		struct are_all_same
 		{
-			using first_type = get_first_t<Ts...>;
+			using first_type = pure_result_type_t<get_first_t<Ts...>>;
 
-			using type = std::conjunction<std::is_same<first_type, Ts>...>;
+			using type = std::conjunction<std::is_same<first_type, pure_result_type_t<Ts>>...>;
 		};
 
 		template<class...Ts>
