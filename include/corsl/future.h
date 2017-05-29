@@ -178,6 +178,11 @@ namespace corsl
 			{
 				return { source, this };
 			}
+
+			corsl::details::cancellation_token_transport await_transform(const corsl::details::cancellation_token_source &source) noexcept
+			{
+				return { source, this };
+			}
 		};
 
 		template<class T = void>
