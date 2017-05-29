@@ -65,7 +65,10 @@ namespace corsl
 
 		[[noreturn]] inline void throw_error(HRESULT hr)
 		{
-			throw hresult_error{ hr };
+			if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+				throw operation_cancelled{};
+			else
+				throw hresult_error{ hr };
 		}
 
 		class timer_cancelled : public operation_cancelled

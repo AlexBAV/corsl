@@ -10,6 +10,8 @@
 
 #include "impl/dependencies.h"
 #include "impl/errors.h"
+#include "impl/promise_base.h"
+
 #include "srwlock.h"
 
 namespace corsl
@@ -17,51 +19,6 @@ namespace corsl
 	namespace details
 	{
 		// future
-		enum class status_t
-		{
-			running,
-			ready,
-			exception
-		};
-
-		struct promise_base0
-		{
-			srwlock lock;
-			std::experimental::coroutine_handle<> resume{};
-			std::exception_ptr exception;
-			std::atomic<int> use_count{ 0 };
-
-			status_t status{ status_t::running };
-
-			bool is_ready(std::unique_lock<srwlock> &) const noexcept
-			{
-				return status != status_t::running;
-			}
-
-			void check_resume(std::unique_lock<srwlock> &&l) noexcept
-			{
-				if (resume)
-				{
-					l.unlock();
-					resume();
-				}
-			}
-
-			void set_exception(std::exception_ptr exception_) noexcept
-			{
-				std::unique_lock<srwlock> l{ lock };
-				exception = exception_;
-				status = status_t::exception;
-				check_resume(std::move(l));
-			}
-
-			void check_exception()
-			{
-				if (status == status_t::exception && exception)
-					std::rethrow_exception(exception);
-			}
-		};
-
 		template<class T>
 		struct promise_base : promise_base0
 		{
@@ -206,6 +163,20 @@ namespace corsl
 					l.unlock();
 					destroy_resume.destroy();
 				}
+			}
+
+			template<class T>
+			T &&await_transform(T &&expr)
+			{
+				if (is_cancelled())
+					throw operation_cancelled{};
+				else
+					return std::forward<T>(expr);
+			}
+
+			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_token_source &source) noexcept
+			{
+				return { source, this };
 			}
 		};
 

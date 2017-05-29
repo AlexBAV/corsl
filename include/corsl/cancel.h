@@ -10,6 +10,7 @@
 
 #include "impl/dependencies.h"
 #include "impl/errors.h"
+#include "impl/promise_base.h"
 
 #include "srwlock.h"
 #include "compatible_base.h"
@@ -23,6 +24,7 @@ namespace corsl
 		namespace bi = boost::intrusive;
 		class cancellation_token_source_body;
 		class cancellation_token_source;
+		struct cancellation_token_transport;
 
 		struct subscription_id
 		{
@@ -37,8 +39,10 @@ namespace corsl
 		class cancellation_token : public bi::list_base_hook<>
 		{
 			friend class cancellation_token_source_body;
+
 			std::shared_ptr<cancellation_token_source_body> body;
 			std::unordered_map<int, std::function<void()>> callbacks;
+			promise_base0 *promise{};
 			srwlock lock;
 			int last_id{ 1 };
 			bool cancelled;
@@ -54,6 +58,8 @@ namespace corsl
 			{
 				std::lock_guard<srwlock> l(lock);
 				cancelled = true;
+				if (promise)
+					promise->cancel();
 
 				for (auto &pair : callbacks)
 				{
@@ -62,8 +68,9 @@ namespace corsl
 				callbacks.clear();	// callbacks are not needed anymore, as they have already fired
 			}
 
+
 		public:
-			cancellation_token(const cancellation_token_source &) noexcept;
+			cancellation_token(cancellation_token_transport &&transport) noexcept;
 			~cancellation_token();
 
 			cancellation_token(const cancellation_token &) = delete;
@@ -180,13 +187,16 @@ namespace corsl
 		};
 
 		// implementations
-		inline cancellation_token::cancellation_token(const cancellation_token_source &src) noexcept :
-			body{ src.body },
-			cancelled{ body->is_cancelled() }
+		inline cancellation_token::cancellation_token(cancellation_token_transport &&transport) noexcept :
+			body{ transport.source.body },
+			cancelled{ body->is_cancelled() },
+			promise{ transport.promise }
 		{
 			body->add_token(*this);
+			if (cancelled)
+				promise->cancel();
 		}
-
+			
 		inline cancellation_token::~cancellation_token()
 		{
 			body->remove_token(*this);
