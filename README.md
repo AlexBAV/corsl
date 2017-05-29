@@ -423,14 +423,24 @@ Cancellation in `corsl` is provided by means of two classes: `cancellation_token
 
 An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means. To cancel any coroutine that "depends" on this token source, its `cancel` method should be called. This method returns immediately. If the caller needs to block until the actual cancellation occurs, it should call `future<T>::get` or `future<T>::wait` methods after cancelling a token source object.
 
-A coroutine that supports cancellation needs to create an instance of `cancellation_token` class on its stack, passing it the reference to the source object.
+In addition, a "connected" cancellation source may be created by calling `create_connected_source`. When a source is cancelled, all connected sources are cancelled as well.
 
-**Notes**:
+A coroutine that supports cancellation needs to create an instance of `cancellation_token` class on its stack, passing it the reference to the source object. It has to do it this way:
 
-* `cancellation_token` must only be constructed on coroutine stack, all other uses lead to undefined behavior.
-* Lifetime of `cancellation_token_source` object is not related to lifetime of any coroutine that references it. It acts as a smart pointer and may be copied and moved very cheap.
+```C++
+corsl::cancellation_token_source source;
 
-A coroutine may check cancellation state of a token by either calling token's `is_cancelled` method or casting a token to `bool`. Calling `check_cancelled` method throws `operation_cancelled` exception if the token has been cancelled.
+// ...
+
+corsl::future<void> coroutine()
+{
+    corsl::cancellation_token token { co_await source };
+
+    // ...
+}
+```
+
+The token is associated with a given coroutine. A coroutine may check cancellation state of a token by either calling token's `is_cancelled` method or casting a token to `bool`. Calling `check_cancelled` method throws `operation_cancelled` exception if the token has been cancelled. If the cancellation is requested, any `co_await` expression executed in the coroutine will throw `operation_cancelled` exception.
 
 Coroutine may also subscribe to the cancellation event with a callback by calling a `subscribe` method. Callback is automatically unsubscribed when token is destroyed or may be manually unsubscribed by calling `unsubscribe` method.
 
@@ -450,7 +460,7 @@ public:
     {
         refresh_task = [this]() -> corsl::future<void>
         {
-            corsl::cancellation_token token { cancel };
+            corsl::cancellation_token token { co_await cancel };
             corsl::async_timer timer;
 
             // When cancelled, cancel timer first
@@ -479,4 +489,3 @@ public:
     }
 };
 ```
-
