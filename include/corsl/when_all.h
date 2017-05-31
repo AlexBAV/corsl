@@ -233,6 +233,7 @@ namespace corsl
 		template<class Iterator>
 		struct range_when_all_awaitable_base
 		{
+			using base_type = range_when_all_awaitable_base;
 			using value_type = typename std::iterator_traits<Iterator>::value_type;
 
 			std::exception_ptr exception;
@@ -275,11 +276,11 @@ namespace corsl
 		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Iterator>
 		{
 			range_when_all_awaitable_void(const Iterator &begin, const Iterator &end) :
-				range_when_all_awaitable_base{ begin,end }
+				base_type { begin,end }
 			{}
 
 			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) noexcept :
-				range_when_all_awaitable_base{ static_cast<range_when_all_awaitable_base &&>(o) }
+				base_type { static_cast<base_type &&>(o) }
 			{}
 
 			template<size_t>
@@ -325,12 +326,13 @@ namespace corsl
 			results_t results;
 
 			range_when_all_awaitable_value(const Iterator &begin, const Iterator &end) :
-				range_when_all_awaitable_base{ begin,end },
+				base_type { begin,end },
 				results(tasks_.size())
 			{}
 
 			range_when_all_awaitable_value(range_when_all_awaitable_value &&o) noexcept :
-				range_when_all_awaitables_base{ static_cast<range_when_all_awaitable_base &&>(o) }
+				base_type{ static_cast<base_type &&>(o) },
+				results{ std::move(o.results) }
 			{}
 
 			template<class T>
