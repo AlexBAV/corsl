@@ -87,6 +87,16 @@ namespace corsl
 			{
 				return future_.get();
 			}
+
+			auto get()
+			{
+				return future_.get();
+			}
+
+			void wait() noexcept
+			{
+				future_.wait();
+			}
 		};
 
 		template<class T>
@@ -112,6 +122,16 @@ namespace corsl
 			auto await_resume() const
 			{
 				return pimpl->await_resume();
+			}
+
+			auto get()
+			{
+				return pimpl->get();
+			}
+
+			void wait() noexcept
+			{
+				future_.wait();
 			}
 		};
 	}
