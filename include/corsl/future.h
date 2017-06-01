@@ -307,6 +307,13 @@ namespace corsl
 				return std::move(*this).iget(promise->get());
 			}
 
+			bool is_ready() const noexcept
+			{
+				assert(promise && "Calling is_ready for uninitialized future is invalid");
+				std::unique_lock<srwlock> l{ promise->lock };
+				return promise->is_ready(l);
+			}
+
 			// await
 			bool await_ready() const noexcept
 			{
