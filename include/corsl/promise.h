@@ -14,7 +14,7 @@ namespace corsl
 {
 	namespace details
 	{
-		template<class T>
+		template<class T = void>
 		class promise
 		{
 			using promise_type = promise_type_<T>;
@@ -29,7 +29,8 @@ namespace corsl
 				promise_->return_value(std::forward<V>(v));
 			}
 
-			std::enable_if_t<std::is_same_v<void, T>, void> set() noexcept
+			// compiler generates error C4716 in the following function if is_same_v used (????)
+			std::enable_if_t<std::is_same<void, T>::value> set() noexcept
 			{
 				promise_->return_void();
 			}
