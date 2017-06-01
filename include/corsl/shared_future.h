@@ -33,7 +33,13 @@ namespace corsl
 			winrt::fire_and_forget start()
 			{
 				co_await resume_background{};
-				co_await future_;
+				try
+				{
+					co_await future_;
+				}
+				catch (...)
+				{
+				}
 
 				std::unique_lock<srwlock> l{ lock };
 				mode = mode::ready;
@@ -61,6 +67,22 @@ namespace corsl
 			shared_future_impl(shared_future_impl &&) = delete;
 			shared_future_impl &operator =(shared_future_impl &&) = delete;
 
+			bool is_ready() const noexcept
+			{
+				return future_.is_ready();
+			}
+
+			auto get()
+			{
+				return future_.get();
+			}
+
+			void wait() noexcept
+			{
+				future_.wait();
+			}
+
+			// await
 			bool await_ready() noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
@@ -87,16 +109,6 @@ namespace corsl
 			{
 				return future_.get();
 			}
-
-			auto get()
-			{
-				return future_.get();
-			}
-
-			void wait() noexcept
-			{
-				future_.wait();
-			}
 		};
 
 		template<class T>
@@ -105,10 +117,27 @@ namespace corsl
 			std::shared_ptr<shared_future_impl<T>> pimpl;
 
 		public:
+			shared_future() = default;
 			shared_future(future<T> &&future) :
 				pimpl{ std::make_shared<shared_future_impl<T>>(std::move(future)) }
 			{}
 
+			bool is_ready() const noexcept
+			{
+				return pimpl->is_ready();
+			}
+
+			auto get()
+			{
+				return pimpl->get();
+			}
+
+			void wait() noexcept
+			{
+				pimpl->wait();
+			}
+
+			// await
 			bool await_ready() const noexcept
 			{
 				return pimpl->await_ready();
@@ -122,16 +151,6 @@ namespace corsl
 			auto await_resume() const
 			{
 				return pimpl->await_resume();
-			}
-
-			auto get()
-			{
-				return pimpl->get();
-			}
-
-			void wait() noexcept
-			{
-				future_.wait();
 			}
 		};
 	}
