@@ -15,7 +15,10 @@ namespace corsl
 {
 	namespace details
 	{
-		// version of resume_background that does not need Windows Runtime API (allows an app to run on Vista+)
+		// The following resumeables are copied from winrt namespace but use
+		// corsl::hresult_error
+		// which allows them to be used in Vista+
+
 		struct resume_background
 		{
 			bool await_ready() const noexcept
@@ -41,9 +44,31 @@ namespace corsl
 			}
 		};
 
-		// The following resumeables are copied from winrt namespace but use
-		// corsl::hresult_error
-		// which allows them to be used in Vista+
+		struct resume_background_long
+		{
+			bool await_ready() const noexcept
+			{
+				return false;
+			}
+
+			void await_resume() const noexcept
+			{
+			}
+
+			void await_suspend(std::experimental::coroutine_handle<> handle) const
+			{
+				auto callback = [](PTP_CALLBACK_INSTANCE pci, void * context)
+				{
+					CallbackMayRunLong(pci);
+					std::experimental::coroutine_handle<>::from_address(context)();
+				};
+
+				if (!TrySubmitThreadpoolCallback(callback, handle.address(), nullptr))
+				{
+					throw_last_error();
+				}
+			}
+		};
 
 		struct resume_after
 		{
@@ -301,6 +326,7 @@ namespace corsl
 	}
 
 	using details::resume_background;
+	using details::resume_background_long;
 	using details::resume_after;
 	using details::resume_on_signal;
 	using details::resumable_io;
