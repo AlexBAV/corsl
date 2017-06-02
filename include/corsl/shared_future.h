@@ -46,13 +46,7 @@ namespace corsl
 				auto existing_continuations = std::move(continuations);
 				l.unlock();
 				for (auto handle : existing_continuations)
-				{
-					[](std::experimental::coroutine_handle<> handle) noexcept -> winrt::fire_and_forget
-					{
-						co_await resume_background{};
-						handle();
-					}(handle);
-				}
+					resume_on_background(handle);
 			}
 
 		public:

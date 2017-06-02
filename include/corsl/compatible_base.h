@@ -323,6 +323,17 @@ namespace corsl
 
 			winrt::impl::handle<io_traits> m_io;
 		};
+
+		inline void resume_on_background(std::experimental::coroutine_handle<> handle)
+		{
+			if (!TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE, void * context)
+			{
+				std::experimental::coroutine_handle<>::from_address(context)();
+			}, handle.address(), nullptr))
+			{
+				throw_last_error();
+			}
+		}
 	}
 
 	using details::resume_background;
@@ -330,6 +341,8 @@ namespace corsl
 	using details::resume_after;
 	using details::resume_on_signal;
 	using details::resumable_io;
+
+	using details::resume_on_background;
 
 	namespace timer
 	{
