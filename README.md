@@ -84,6 +84,8 @@ corsl::future<void> coroutine1()
 }
 ```
 
+In addition to `resume_background` class, library has `resume_background_long` class. An instance of this class should be awaited instead of `resume_background` if the coroutine is going to spend **long** time before the next suspension point. This is only a hint to the thread pool implementation, though.
+
 ### `future<T>`: Light-Weight Awaitable Class
 
 ```C++
@@ -101,7 +103,8 @@ Using `co_await` or calling `wait` or `get` with a default-initialized `future` 
 #### Notes
 
 1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case co_await is applied to a rvalue reference (or temporary).
-2. Cancellation is not built-in into the `future` class. Use the "external" cancellation as described [later](#cancellation-support).
+2. `future<T>` must only be awaited once. Calling `get` or `wait` counts as well. Library will fire an assertion in debug mode if `future` is awaited more than once. However, it is allowed to call `get` and `wait` on already completed future.
+3. `future<T>` integrates with library's [cancellation support](#cancellation-support). If a cancellation source is associated with a future and it is cancelled, any `co_await` expression automatically throws an exception.
 
 ### `shared_future<T>` Class
 
@@ -109,9 +112,9 @@ Using `co_await` or calling `wait` or `get` with a default-initialized `future` 
 #include <corsl/shared_future.h>
 ```
 
-`future<T>` class allows only a single continuation to be scheduled on operation completion. That means that only one thread or coroutine is allowed to `co_await` the future.
+`shared_future<T>` class may be used to bypass a `future`'s limitation of only allowing a single continuation. If multiple continuations are required, an instance of `shared_future<T>` must be constructed from a `future<T>`. It allows any number of callers to `co_await` shared future. `shared_future<T>` is default constructible, copyable and moveable. 
 
-If multiple continuations are required, an instance of `shared_future<T>` must be constructed from a `future<T>`. It allows any number of callers to `co_await` shared future.
+Awaiting or blocking on default-constructed (or moved-from) `shared_future<T>` is an undefined behavior.
 
 ```C++
 #include <corsl/shared_future.h>
@@ -417,15 +420,23 @@ corsl::future<void> test_async_queue_consumer()
 #include <corsl/cancel.h>
 ```
 
+**Breaking Change**: Cancellation support has been reworked and new API is not compatible with previous version.
+
 **Note**: Including `cancel.h` will add dependency on `Boost.Intrusive` header-only library.
 
-Cancellation in `corsl` is provided by means of two classes: `cancellation_token_source` and `cancellation_token`.
+Cancellation in `corsl` is provided by means of three classes: `cancellation_source`, `cancellation_token` and `cancellation_subscription<>`.
 
-An object of `cancellation_token_source` class should be created outside of a coroutine the user is going to cancel and a reference to it should be passed to the coroutine by any possible means. To cancel any coroutine that "depends" on this token source, its `cancel` method should be called. This method returns immediately. If the caller needs to block until the actual cancellation occurs, it should call `future<T>::get` or `future<T>::wait` methods after cancelling a token source object.
+#### `cancellation_source`
 
-In addition, a "connected" cancellation source may be created by calling `create_connected_source`. When a source is cancelled, all connected sources are cancelled as well.
+An object of `cancellation_source` type must be created outside of a coroutine. It is always external to a coroutine. A reference to `cancellation_source` is usually passed to coroutine (or made available to it by any other means, for example, as class member variable). 
 
-A coroutine that supports cancellation needs to create an instance of `cancellation_token` class on its stack, passing it the reference to the source object. It has to do it this way:
+A connected cancellation source may be created by calling `create_connected_source`. When a source is cancelled, all connected sources are cancelled as well.
+
+To cancel a source, call its `cancel` method. This method returns immediately. If the caller needs to block until the actual cancellation occurs, it should use `future<T>::get` or `future<T>::wait` methods after cancelling a token source object.
+
+#### `cancellation_token`
+
+A coroutine that supports cancellation needs to associate itself with a cancellation source by creating an instance of `cancellation_token` class on its stack, passing it the reference to the source object. The source object must be *awaited* before passing it to a token constructor:
 
 ```C++
 corsl::cancellation_token_source source;
@@ -440,9 +451,13 @@ corsl::future<void> coroutine()
 }
 ```
 
-The token is associated with a given coroutine. A coroutine may check cancellation state of a token by either calling token's `is_cancelled` method or casting a token to `bool`. Calling `check_cancelled` method throws `operation_cancelled` exception if the token has been cancelled. If the cancellation is requested, any `co_await` expression executed in the coroutine will throw `operation_cancelled` exception.
+Once association is done, any `co_await` the coroutine executes will throw `operation_cancelled` exception if the source has been cancelled. The `cancellation_token` constructor will also throw if the source is cancelled at the object construction time.
 
-Coroutine may also subscribe to the cancellation event with a callback by calling a `subscribe` method. Callback is automatically unsubscribed when token is destroyed or may be manually unsubscribed by calling `unsubscribe` method.
+The coroutine may then check cancellation state of a token by either calling token's `is_cancelled` method or casting a token to `bool`. Calling `check_cancelled` method throws `operation_cancelled` exception if the token has been cancelled.
+
+#### `cancellation_subscription<>`
+
+Coroutine may also subscribe to the cancellation event with a callback by creating an instance of `cancellation_subscription<>` class:
 
 ```C++
 #include <corsl/future.h>
@@ -451,7 +466,7 @@ Coroutine may also subscribe to the cancellation event with a callback by callin
 
 class server
 {
-    corsl::cancellation_token_source cancel;
+    corsl::cancellation_source cancel;
     corsl::future<void> refresh_task;
 
     void refresh() { ... }
@@ -460,14 +475,16 @@ public:
     {
         refresh_task = [this]() -> corsl::future<void>
         {
+            // Associate this coroutine with a cancellation source
             corsl::cancellation_token token { co_await cancel };
             corsl::async_timer timer;
 
             // When cancelled, cancel timer first
-            token.subscribe([&]
+            // Create a callback subscription
+            corsl::cancellation_subscription subscription { token, [&]
             {
                 timer.cancel();
-            });
+            } };
 
             while (!token)
             {
@@ -480,12 +497,9 @@ public:
     void stop()
     {
         cancel.cancel();
-        try
-        {
-            refresh_task.get();
-        } catch(...)
-        {
-        }
+        refresh_task.wait();
     }
 };
 ```
+
+If cancellation has been requested and `cancellation_subscription` destructor is invoked, it will block until the callback exits.
