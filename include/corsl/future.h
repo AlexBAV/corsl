@@ -174,12 +174,12 @@ namespace corsl
 					return std::forward<T>(expr);
 			}
 
-			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_token_source &source) noexcept
+			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_source &source) noexcept
 			{
 				return { source, this };
 			}
 
-			corsl::details::cancellation_token_transport await_transform(const corsl::details::cancellation_token_source &source) noexcept
+			corsl::details::cancellation_token_transport await_transform(const corsl::details::cancellation_source &source) noexcept
 			{
 				return { source, this };
 			}
@@ -279,19 +279,19 @@ namespace corsl
 						return;
 				}
 
-				winrt::impl::lock x;
-				winrt::impl::condition_variable cv;
+				srwlock x;
+				condition_variable cv;
 				bool completed = false;
 
 				[&]()->winrt::fire_and_forget
 				{
 					co_await special_await{ promise };
-					const winrt::impl::lock_guard guard(x);
+					const std::lock_guard<srwlock> guard{ x };
 					completed = true;
 					cv.wake_one();
 				}();
 
-				const winrt::impl::lock_guard guard(x);
+				const std::lock_guard<srwlock> guard{ x };
 				cv.wait_while(x, [&] { return !completed; });
 			}
 

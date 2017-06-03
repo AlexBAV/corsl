@@ -17,7 +17,6 @@
 #include <array>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <functional>
 #include <cassert>
 #include <experimental/resumable>

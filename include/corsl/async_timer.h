@@ -49,8 +49,10 @@ namespace corsl
 
 			void resume() noexcept
 			{
+				// Waiting for callback completion may lock if the timer is cancelled
+				// We need to execute continuation on another thread
 				if (resume_location && !resumed.test_and_set())
-					resume_location();
+					resume_on_background(resume_location);
 			}
 
 			void set_handle(std::experimental::coroutine_handle<> handle)

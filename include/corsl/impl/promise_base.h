@@ -71,10 +71,10 @@ namespace corsl
 			}
 		};
 
-		class cancellation_token_source;
+		class cancellation_source;
 		struct cancellation_token_transport
 		{
-			const cancellation_token_source &source;
+			const cancellation_source &source;
 			promise_base0 *promise;
 
 			bool await_ready() const noexcept

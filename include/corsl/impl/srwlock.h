@@ -49,8 +49,43 @@ namespace corsl
 			{
 				ReleaseSRWLockShared(&m_lock);
 			}
+
+			PSRWLOCK get() noexcept
+			{
+				return &m_lock;
+			}
+		};
+
+		class condition_variable
+		{
+			CONDITION_VARIABLE m_cv{};
+		
+		public:
+			condition_variable(condition_variable const &) = delete;
+			condition_variable const & operator=(condition_variable const &) = delete;
+			condition_variable() noexcept = default;
+
+			template <typename F>
+			void wait_while(srwlock &x, const F &predicate) noexcept(noexcept(predicate()))
+			{
+				while (predicate())
+				{
+					WINRT_VERIFY(SleepConditionVariableSRW(&m_cv, x.get(), INFINITE, 0));
+				}
+			}
+
+			void wake_one() noexcept
+			{
+				WakeConditionVariable(&m_cv);
+			}
+
+			void wake_all() noexcept
+			{
+				WakeAllConditionVariable(&m_cv);
+			}
 		};
 	}
 
 	using details::srwlock;
+	using details::condition_variable;
 }
