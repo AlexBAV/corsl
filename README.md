@@ -481,7 +481,7 @@ public:
 
             // When cancelled, cancel timer first
             // Create a callback subscription
-            corsl::cancellation_subscription subscription { token, [&]
+            corsl::cancellation_subscription<> subscription { token, [&]
             {
                 timer.cancel();
             } };
