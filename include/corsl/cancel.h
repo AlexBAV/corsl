@@ -38,7 +38,10 @@ namespace corsl
 			cancellation_subscription_base(cancellation_token &token) noexcept :
 				token{ token }
 			{}
-			
+
+			cancellation_subscription_base(const cancellation_subscription_base &) = delete;
+			cancellation_subscription_base &operator =(const cancellation_subscription_base &) = delete;
+
 			void add() noexcept;
 			void remove() noexcept;
 
@@ -232,9 +235,8 @@ namespace corsl
 			cancelled{ body->is_cancelled() },
 			promise{ transport.promise }
 		{
-			if (cancelled)
-				throw operation_cancelled{};
-
+			// Throw immediately if source is already cancelled
+			check_cancelled();
 			body->add_token(*this);
 		}
 			
