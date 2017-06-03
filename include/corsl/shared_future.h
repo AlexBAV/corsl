@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <vector>
+
 #include "future.h"
 #include "compatible_base.h"
 
@@ -43,7 +45,7 @@ namespace corsl
 
 				std::unique_lock<srwlock> l{ lock };
 				mode = mode::ready;
-				auto existing_continuations = std::move(continuations);
+				auto existing_continuations{ std::move(continuations) };
 				l.unlock();
 				for (auto handle : existing_continuations)
 					resume_on_background(handle);
@@ -80,23 +82,24 @@ namespace corsl
 			bool await_ready() noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
-				switch (mode)
-				{
-				case mode::not_started:
-					mode = mode::started;
-					start();
-					break;
-				case mode::ready:
+				if (mode == mode::ready)
 					return true;
+				else
+				{
+					l.release();
+					return false;
 				}
-				l.release();
-				return false;
 			}
 
 			void await_suspend(std::experimental::coroutine_handle<> resume)
 			{
 				std::unique_lock<srwlock> l{ lock, std::adopt_lock };
 				continuations.emplace_back(resume);
+				if (mode == mode::not_started)
+				{
+					mode = mode::started;
+					start();
+				}
 			}
 
 			auto await_resume()
