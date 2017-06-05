@@ -8,24 +8,27 @@
 
 #pragma once
 
+#include <queue>
+#include <variant>
+
 #include "impl/dependencies.h"
 #include "compatible_base.h"
-#include <queue>
-
 #include "srwlock.h"
 
 namespace corsl
 {
 	namespace details
 	{
-		template<class T>
+		template<class T, class Queue = std::queue<T>>
 		class async_queue
 		{
+			using queue_t = Queue;
+
 			struct awaitable
 			{
 				std::experimental::coroutine_handle<> handle;
 				async_queue *master;
-				T value;
+				std::variant<T, std::exception_ptr> value;
 
 				awaitable(async_queue *master) noexcept :
 					master{ master }
@@ -36,12 +39,12 @@ namespace corsl
 					value = std::move(value_);
 				}
 
-				void resume() noexcept
+				void set_exception(std::exception_ptr &&ptr) noexcept
 				{
-					handle();
+					value = std::move(ptr);
 				}
 
-				bool await_ready() noexcept
+				bool await_ready()
 				{
 					return master->is_ready(value);
 				}
@@ -54,32 +57,40 @@ namespace corsl
 
 				T await_resume()
 				{
-					return std::move(value);
+					if (value.index() == 1)
+						std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
+					else
+						return std::get<T>(std::move(value));
 				}
 			};
 
 			srwlock queue_lock;
-			std::queue<T> queue;
+			queue_t queue;
 			awaitable *current{ nullptr };
+			bool is_cancelled{ false };
 
-			bool is_ready(T &value)
+			bool is_ready(std::variant<T, std::exception_ptr> &value)
 			{
+				std::unique_lock<srwlock> l{ queue_lock };
+				if (is_cancelled)
+				{
+					value = std::make_exception_ptr(operation_cancelled{});
+					return true;
+				}
 				if (!queue.empty())
 				{
-					std::unique_lock<srwlock> l(queue_lock);
-					if (!queue.empty())
-					{
-						value = std::move(queue.front());
-						queue.pop();
-						return true;
-					}
+					value = std::move(queue.front());
+					queue.pop();
+					return true;
 				}
 				return false;
 			}
 
 			bool set_awaitable(awaitable *pointer)
 			{
-				std::unique_lock<srwlock> l(queue_lock);
+				std::unique_lock<srwlock> l{ queue_lock };
+				if (is_cancelled)
+					throw operation_cancelled{};
 				if (!queue.empty())
 				{
 					pointer->set_result(std::move(queue.front()));
@@ -90,31 +101,43 @@ namespace corsl
 				return true;
 			}
 
-			winrt::fire_and_forget drain(std::unique_lock<srwlock> lock)
+			void drain(std::unique_lock<srwlock> &&lock)
 			{
-				co_await corsl::resume_background{};
-				auto v = std::move(queue.front());
-				queue.pop();
-				auto cur = current;
-				current = nullptr;
-				lock.unlock();
-				cur->set_result(std::move(v));
-				cur->resume();
+				if (current)
+				{
+					auto cur = std::exchange(current, nullptr);
+					if (is_cancelled)
+						cur->set_exception(std::make_exception_ptr(operation_cancelled{}));
+					else
+					{
+						auto v = std::move(queue.front());
+						cur->set_result(std::move(v));
+						queue.pop();
+					}
+					resume_on_background(cur->handle);
+				}
 			}
 
 		public:
 			void push(T &&item)
 			{
-				std::unique_lock<srwlock> l(queue_lock);
-				queue.emplace(std::move(item));
-				if (current)
-					drain(std::move(l));
+				std::unique_lock<srwlock> l{ queue_lock };
+				if (!is_cancelled)
+					queue.emplace(std::move(item));
+				drain(std::move(l));
 			}
 
 			template<class...Args>
 			void emplace(Args &&...args)
 			{
 				push(T(std::forward<Args>(args)...));
+			}
+
+			void cancel()
+			{
+				std::unique_lock<srwlock> l{ queue_lock };
+				is_cancelled = true;
+				drain(std::move(l));
 			}
 
 			awaitable next() noexcept
