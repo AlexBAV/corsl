@@ -105,7 +105,7 @@ namespace corsl
 			//
 			void cancel()
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				cancelled = true;
 				if (promise)
 					promise->cancel();
@@ -116,13 +116,13 @@ namespace corsl
 
 			void add_subscription(cancellation_subscription_base &callback) noexcept
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				callbacks.push_back(callback);
 			}
 
 			void remove_subscription(cancellation_subscription_base &callback) noexcept
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				callbacks.erase(callbacks.s_iterator_to(callback));
 			}
 
@@ -135,7 +135,7 @@ namespace corsl
 
 			explicit operator bool() const noexcept
 			{
-				return cancelled;
+				return is_cancelled();
 			}
 
 			bool is_cancelled() const noexcept
@@ -145,7 +145,7 @@ namespace corsl
 
 			void check_cancelled() const
 			{
-				if (cancelled)
+				if (is_cancelled())
 					throw operation_cancelled{};
 			}
 		};
@@ -155,38 +155,39 @@ namespace corsl
 			friend class cancellation_token;
 			friend class cancellation_source;
 
-			srwlock lock;
+			mutable srwlock lock;
 			bi::list<cancellation_token, bi::constant_time_size<false>> tokens;
 			std::vector<std::weak_ptr<cancellation_source_body>> related_sources;
 			bool cancelled{ false };
 
 			void add_token(cancellation_token &token) noexcept
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				tokens.push_back(token);
 			}
 
 			void remove_token(cancellation_token &token) noexcept
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				tokens.erase(tokens.s_iterator_to(token));
 			}
 
 			void add_related(std::shared_ptr<cancellation_source_body> &related)
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				related_sources.emplace_back(related);
 			}
 
 		public:
 			bool is_cancelled() const noexcept
 			{
+				std::shared_lock<srwlock> l{ lock };
 				return cancelled;
 			}
 
 			void cancel() noexcept
 			{
-				std::lock_guard<srwlock> l(lock);
+				std::lock_guard<srwlock> l{ lock };
 				if (!cancelled)
 				{
 					cancelled = true;
@@ -226,6 +227,11 @@ namespace corsl
 			cancellation_source create_connected_source() const
 			{
 				return { internal_t{}, body.get() };
+			}
+
+			bool is_cancelled() const noexcept
+			{
+				return body->is_cancelled();
 			}
 		};
 

@@ -24,7 +24,7 @@ namespace corsl
 			promise() = default;
 
 			template<class V>
-			std::enable_if_t<!std::is_same_v<void, T>, void> set(V &&v) noexcept
+			std::enable_if_t<!std::is_same<void, T>::value, void> set(V &&v) noexcept
 			{
 				promise_->return_value(std::forward<V>(v));
 			}
