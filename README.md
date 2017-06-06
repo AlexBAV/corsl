@@ -381,6 +381,8 @@ corsl::future<void> coroutine7()
 
 `async_queue<T>` is an awaitable producer-consumer queue. Producer adds values to the queue by calling `push` or `emplace` methods while consumer calls `next` method to get an awaitable that produces the result from the head of a queue.
 
+`cancel` method cancels the queue. The next (or current) continuation is immediately cancelled by getting `operation_cancelled` exception. Any subsequent `push` will be ignored.
+
 **Note**: While multiple producers are allowed to add values to a queue concurrently (actual access is synchronized with a lock), only single consumer is supported. Calling `next` from multiple coroutines or threads will lead to undefined behavior.
 
 ```C++
@@ -419,8 +421,6 @@ corsl::future<void> test_async_queue_consumer()
 ```C++
 #include <corsl/cancel.h>
 ```
-
-**Breaking Change**: Cancellation support has been reworked and new API is not compatible with previous version.
 
 **Note**: Including `cancel.h` will add dependency on `Boost.Intrusive` header-only library.
 
