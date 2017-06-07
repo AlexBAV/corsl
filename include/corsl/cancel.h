@@ -117,7 +117,7 @@ namespace corsl
 			void add_subscription(cancellation_subscription_base &callback) noexcept
 			{
 				std::lock_guard<srwlock> l{ lock };
-				callbacks.push_back(callback);
+				callbacks.push_front(callback);
 			}
 
 			void remove_subscription(cancellation_subscription_base &callback) noexcept
