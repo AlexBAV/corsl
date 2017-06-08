@@ -14,7 +14,14 @@ namespace corsl
 {
 	namespace details
 	{
-		class async_timer
+		template<class Derived>
+		struct simple_base
+		{
+			using base_type = simple_base;
+		};
+
+		template<template<class> class Base>
+		class async_timer : Base<async_timer<Base>>
 		{
 			struct timer_traits : winrt::impl::handle_traits<PTP_TIMER>
 			{
@@ -61,6 +68,11 @@ namespace corsl
 			}
 
 		public:
+			template<class...Args>
+			async_timer(Args &&...args) :
+				base_type{ std::forward<Args>(args)... }
+			{}
+
 			auto wait(winrt::Windows::Foundation::TimeSpan duration) noexcept
 			{
 				class awaiter
@@ -108,5 +120,5 @@ namespace corsl
 		};
 	}
 
-	using details::async_timer;
+	using async_timer = details::async_timer<details::simple_base>;
 }
