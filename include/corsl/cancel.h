@@ -73,7 +73,7 @@ namespace corsl
 		public:
 			template<class F>
 			cancellation_subscription(cancellation_token &token, F &&f) :
-				cancellation_subscription_base{ token },
+				cancellation_subscription_base { token },
 				f{ std::forward<F>(f) }
 			{
 				// Exit early if token is already cancelled
@@ -87,9 +87,6 @@ namespace corsl
 				std::lock_guard<srwlock> l{ lock };
 				cv.wait_while(lock, [this] { return !completed; });
 			}
-
-			cancellation_subscription(const cancellation_subscription &) = delete;
-			cancellation_subscription &operator =(const cancellation_subscription &) = delete;
 		};
 
 		class cancellation_token : public bi::list_base_hook<>
