@@ -6,9 +6,9 @@
 
 One of the goals of `corsl` library was being able to use it under Windows Vista or later operating system.
 
-Library is header-only and consists of several headers. The only external dependency is `cppwinrt` library. For simplicity, there is header `all.h`, which includes all other headers, except `cancel.h` header.
+Library is header-only and consists of several headers. The only external dependency is `cppwinrt` library. For simplicity, there is header `all.h`, which includes all other headers, except `cancel.h` and `auto_cancel_timer.h` headers.
 
-`cancel.h` header additionally depends on [`Boost.Intrusive`](http://www.boost.org/doc/libs/1_64_0/doc/html/intrusive.html) library and therefore is not included by default. `Boost.Intrusive` is a header-only library distributed with `boost`.
+`cancel.h` and `auto_cancel_timer.h` headers additionally depend on [`Boost.Intrusive`](http://www.boost.org/doc/libs/1_64_0/doc/html/intrusive.html) library and therefore are not included by default. `Boost.Intrusive` is a header-only library distributed with `boost`.
 
 ## Compiler Support
 
@@ -26,7 +26,7 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 * [`shared_future<T>` Class](#shared_futuret-class)
 * [`promise<T>`: Asynchronous Promise Type](#promiset-asynchronous-promise-type)
 * [`start` Function](#start-function)
-* [`async_timer` Class](#async_timer-class)
+* [`async_timer` and `auto_cancel_timer` Classes](#async_timer-and-auto_cancel_timer-classes)
 * [`resumable_io_timeout` Class](#resumable_io_timeout-class)
 * [`when_all` Function](#when_all-function)
 * [`when_any` Function](#when_any-function)
@@ -243,13 +243,13 @@ inline void block_wait(Awaitable &&awaitable) noexcept
 }
 ```
 
-### `async_timer` Class
+### `async_timer` and `auto_cancel_timer` Classes
 
 ```C++
 #include <corsl/async_timer.h>
 ```
 
-This is an awaitable cancellable timer. Its usage is very simple:
+`async_timer` is an awaitable cancellable timer. Its usage is very simple:
 
 ```C++
 #include <corsl/future.h>
@@ -275,6 +275,8 @@ void cancel_wait()
 ```
 
 Another example of `async_timer` usage is provided below in [Cancellation Support](#cancellation-support) section.
+
+`auto_cancel_timer` is a special implementation of `async_timer` that automatically cancels itself if associated `cancellation_token` (see below) is cancelled.
 
 ### `resumable_io_timeout` Class
 
@@ -460,20 +462,21 @@ The coroutine may then check cancellation state of a token by either calling tok
 Coroutine may also subscribe to the cancellation event with a callback by creating an instance of `cancellation_subscription<>` class:
 
 ```C++
-#include <corsl/future.h>
-#include <corsl/async_timer.h>
+#include <corsl/all.h>
 #include <corsl/cancel.h>
+#include <corsl/auto_cancel_timer.h>    // this header is not included in all.h
 
 class server
 {
     corsl::cancellation_source cancel;
-    corsl::future<void> refresh_task;
+    corsl::future<void> refresh1_task, refresh2_task;
 
-    void refresh() { ... }
+    void refresh1() { ... }
+    void refresh2() { ... }
 public:
     void start()
     {
-        refresh_task = [this]() -> corsl::future<void>
+        refresh1_task = [this]() -> corsl::future<void>
         {
             // Associate this coroutine with a cancellation source
             corsl::cancellation_token token { co_await cancel };
@@ -489,7 +492,20 @@ public:
             while (!token)
             {
                 co_await timer.wait(2min);
-                refresh();
+                refresh1();
+            }
+        }();
+
+        refresh2_task = [this]() -> corsl::future<void>
+        {
+            // Associate this coroutine with a cancellation source
+            corsl::cancellation_token token { co_await cancel };
+            corsl::auto_cancel_timer timer { token };   // automatically subscribes to token
+
+            while (!token)
+            {
+                co_await timer.wait(2min);
+                refresh2();
             }
         }();
     }
@@ -497,7 +513,7 @@ public:
     void stop()
     {
         cancel.cancel();
-        refresh_task.wait();
+        corsl::block_wait(corsl::when_all(refresh1_task, refresh2_task));
     }
 };
 ```
