@@ -20,19 +20,29 @@ namespace corsl
 			using promise_type = promise_type_<T>;
 			std::shared_ptr<promise_type> promise_{ std::make_shared<promise_type>() };
 
-		public:
-			promise() = default;
-
-			template<class V>
-			std::enable_if_t<!std::is_same<void, T>::value, void> set(V &&v) noexcept
+			template<class A, class V>
+			std::enable_if_t<!std::is_same_v<void, A>> iset(V &&v) noexcept
 			{
 				promise_->return_value(std::forward<V>(v));
 			}
 
-			// compiler generates error C4716 in the following function if is_same_v used (????)
-			std::enable_if_t<std::is_same<void, T>::value> set() noexcept
+			template<class A>
+			std::enable_if_t<std::is_same_v<void, A>> iset() noexcept
 			{
 				promise_->return_void();
+			}
+		public:
+			promise() = default;
+
+			void set() noexcept
+			{
+				iset<T>();
+			}
+
+			template<class V>
+			void set(V &&v) noexcept
+			{
+				iset<T>(std::forward<V>(v));
 			}
 
 			void set_exception(std::exception_ptr &&ex) noexcept
