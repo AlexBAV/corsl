@@ -15,15 +15,14 @@ namespace corsl
 {
 	namespace details
 	{
-		template<class Derived>
-		struct auto_cancellation_base
+		class auto_cancel_timer : public async_timer
 		{
-			using base_type = auto_cancellation_base;
 			cancellation_subscription<> subscription;
 
-			auto_cancellation_base(cancellation_token &token) :
+		public:
+			auto_cancel_timer(cancellation_token &token) :
 				subscription{ token,[this]() noexcept {
-					static_cast<Derived &>(*this).cancel();
+					this->cancel();
 				}
 			}
 			{
@@ -31,5 +30,5 @@ namespace corsl
 		};
 	}
 
-	using auto_cancel_timer = details::async_timer<details::auto_cancellation_base>;
+	using details::auto_cancel_timer;
 }
