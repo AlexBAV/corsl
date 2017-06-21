@@ -59,7 +59,7 @@ namespace corsl
 			void set_exception(std::exception_ptr exception_) noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
-				exception = exception_;
+				exception = std::move(exception_);
 				status = status_t::exception;
 				check_resume(std::move(l));
 			}
