@@ -108,7 +108,7 @@ namespace corsl
 			}
 		};
 
-		template<class T>
+		template<class T = void>
 		class shared_future
 		{
 			std::shared_ptr<shared_future_impl<T>> pimpl;
