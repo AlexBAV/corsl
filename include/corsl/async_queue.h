@@ -28,7 +28,7 @@ namespace corsl
 			{
 				std::experimental::coroutine_handle<> handle;
 				async_queue *master;
-				std::variant<T, std::exception_ptr> value;
+				std::variant<std::exception_ptr, T> value;
 
 				awaitable(async_queue *master) noexcept :
 					master{ master }
@@ -57,7 +57,7 @@ namespace corsl
 
 				T await_resume()
 				{
-					if (value.index() == 1)
+					if (value.index() == 0)
 						std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
 					else
 						return std::get<T>(std::move(value));
@@ -69,7 +69,7 @@ namespace corsl
 			awaitable *current{ nullptr };
 			bool is_cancelled{ false };
 
-			bool is_ready(std::variant<T, std::exception_ptr> &value)
+			bool is_ready(std::variant<std::exception_ptr, T> &value)
 			{
 				std::unique_lock<srwlock> l{ queue_lock };
 				if (is_cancelled)
