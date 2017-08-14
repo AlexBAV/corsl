@@ -15,6 +15,8 @@
 #include "srwlock.h"
 #include "compatible_base.h"
 
+#include <shared_mutex>
+
 #include <boost/intrusive/list.hpp>
 
 namespace corsl
