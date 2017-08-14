@@ -101,8 +101,9 @@ namespace corsl
 				return true;
 			}
 
-			void drain(std::unique_lock<srwlock> &&lock)
+			void drain([[maybe_unused]] std::unique_lock<srwlock> &&lock)
 			{
+				lock;
 				if (current)
 				{
 					auto cur = std::exchange(current, nullptr);
