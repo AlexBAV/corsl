@@ -37,6 +37,11 @@ namespace corsl
 					current.set(std::forward<V>(value));
 				}
 
+				void set_exception(std::exception_ptr exception_) noexcept
+				{
+					current.set_exception(std::move(exception_));
+				}
+
 				auto get_future() const noexcept
 				{
 					return current.get_future();

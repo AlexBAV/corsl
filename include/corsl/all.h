@@ -19,4 +19,3 @@
 #include "advanced_io.h"
 #include "async_queue.h"
 #include "promise.h"
-#include "generator.h"
