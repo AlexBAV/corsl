@@ -120,11 +120,12 @@ namespace corsl
 			}
 
 		public:
-			void push(T &&item)
+			template<class V>
+			void push(V &&item)
 			{
 				std::unique_lock<srwlock> l{ queue_lock };
 				if (!is_cancelled)
-					queue.emplace(std::move(item));
+					queue.emplace(std::forward<V>(item));
 				drain(std::move(l));
 			}
 
