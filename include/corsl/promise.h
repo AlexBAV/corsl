@@ -47,7 +47,7 @@ namespace corsl
 
 			void set_exception(std::exception_ptr &&ex) noexcept
 			{
-				promise_->set_exception(std::move(ex));
+				promise_->internal_set_exception(std::move(ex));
 			}
 
 			future<T> get_future() const noexcept

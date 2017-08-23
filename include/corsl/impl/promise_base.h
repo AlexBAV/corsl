@@ -56,11 +56,18 @@ namespace corsl
 				}
 			}
 
+			void internal_set_exception(std::exception_ptr &&exception_) noexcept
+			{
+				std::unique_lock<srwlock> l{ lock };
+				exception = std::move(exception_);
+				status = status_t::exception;
+				check_resume(std::move(l));
+			}
+
 			void unhandled_exception() noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
 				exception = std::current_exception();
-//					std::move(exception_);
 				status = status_t::exception;
 				check_resume(std::move(l));
 			}

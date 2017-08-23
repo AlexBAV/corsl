@@ -47,7 +47,7 @@ namespace corsl
 			void add() noexcept;
 			void remove() noexcept;
 
-			virtual winrt::fire_and_forget run() = 0;
+			virtual fire_and_forget<> run() = 0;
 		};
 
 		// TODO: remove std::function when MSVC starts supporting class template parameter deduction
@@ -59,13 +59,13 @@ namespace corsl
 			srwlock lock;
 			condition_variable cv;
 
-			virtual winrt::fire_and_forget run() override
+			virtual fire_and_forget<> run() override
 			{
 				{
 					std::lock_guard<srwlock> l{ lock };
 					completed = false;
 				}
-				co_await resume_background{};
+				co_await resume_background<>{};
 				f();
 				std::lock_guard<srwlock> l{ lock };
 				completed = true;
