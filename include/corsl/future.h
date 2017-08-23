@@ -283,7 +283,7 @@ namespace corsl
 				condition_variable cv;
 				bool completed = false;
 
-				[&]()->winrt::fire_and_forget
+				[&]()->fire_and_forget<>
 				{
 					co_await special_await{ promise };
 					const std::lock_guard<srwlock> guard{ x };

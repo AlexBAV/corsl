@@ -9,11 +9,12 @@
 #include <chrono>
 #include <iostream>
 
-#include <experimental/resumable>
 #include <corsl/all.h>
 
 #include <future>
 #include <sstream>
+
+#include <numeric>
 
 using namespace std::chrono_literals;
 using namespace corsl::timer;
@@ -253,16 +254,18 @@ void test_shared_future()
 	auto event = CreateEvent(nullptr, TRUE, FALSE, nullptr);
 	std::atomic<int> counter{ 0 };
 
+	auto lambda = [&](int i) -> corsl::fire_and_forget
+	{
+		using namespace std::string_literals;
+		co_await corsl::resume_background{};
+		std::wcout << (std::to_wstring(i + 1) + L". shared_future await completed with result "s + std::to_wstring(co_await shared_future) + L"\n"s);
+		if (counter.fetch_add(1, std::memory_order_relaxed) == 9)
+			SetEvent(event);
+	};
+
 	for (int i = 0; i < 10; ++i)
 	{
-		[&](int i) -> winrt::fire_and_forget
-		{
-			using namespace std::string_literals;
-			co_await corsl::resume_background{};
-			std::wcout << (std::to_wstring(i + 1) + L". shared_future await completed with result "s + std::to_wstring(co_await shared_future) + L"\n"s);
-			if (counter.fetch_add(1, std::memory_order_relaxed) == 9)
-				SetEvent(event);
-		}(i);
+		lambda(i);
 	}
 
 	promise.set(42);
@@ -270,8 +273,29 @@ void test_shared_future()
 	CloseHandle(event);
 }
 
+//corsl::async_generator<int> test_generator()
+//{
+//	using namespace corsl::timer;
+//	for (int i = 0; i < 10; ++i)
+//	{
+//		co_await 2s;
+//		co_yield i;
+//	}
+//}
+
+//corsl::future<> test_generator_base()
+//{
+//	int sum = 0;
+//	for (auto x : test_generator())
+//	{
+//		sum += co_await x;
+//	}
+//}
+//
 int main()
 {
+	//test_generator_base().get();
+
 	{
 		corsl::promise<void> promise;
 

@@ -76,7 +76,7 @@ namespace corsl
 		};
 
 		template<size_t Index, class Awaitable>
-		inline winrt::fire_and_forget when_any_helper_single(std::shared_ptr<when_any_block_void> master, Awaitable task) noexcept
+		inline fire_and_forget<> when_any_helper_single(std::shared_ptr<when_any_block_void> master, Awaitable task) noexcept
 		{
 			try
 			{
@@ -140,7 +140,7 @@ namespace corsl
 
 		//non-void case
 		template<class T, class Awaitable>
-		inline winrt::fire_and_forget when_any_helper_single_value(std::shared_ptr<when_any_block_value<T>> master, Awaitable task, size_t index) noexcept
+		inline fire_and_forget<> when_any_helper_single_value(std::shared_ptr<when_any_block_value<T>> master, Awaitable task, size_t index) noexcept
 		{
 			try
 			{
@@ -212,7 +212,7 @@ namespace corsl
 		// range
 		// void case
 		template<class Awaitable>
-		inline winrt::fire_and_forget range_when_any_helper_single(std::shared_ptr<when_any_block_void> master, Awaitable task, size_t index) noexcept
+		inline fire_and_forget<> range_when_any_helper_single(std::shared_ptr<when_any_block_void> master, Awaitable task, size_t index) noexcept
 		{
 			try
 			{

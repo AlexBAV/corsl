@@ -19,32 +19,8 @@ namespace corsl
 		// corsl::hresult_error
 		// which allows them to be used in Vista+
 
+		template<bool is_long = false>
 		struct resume_background
-		{
-			bool await_ready() const noexcept
-			{
-				return false;
-			}
-
-			void await_resume() const noexcept
-			{
-			}
-
-			void await_suspend(std::experimental::coroutine_handle<> handle) const
-			{
-				auto callback = [](PTP_CALLBACK_INSTANCE, void * context)
-				{
-					std::experimental::coroutine_handle<>::from_address(context)();
-				};
-
-				if (!TrySubmitThreadpoolCallback(callback, handle.address(), nullptr))
-				{
-					throw_last_error();
-				}
-			}
-		};
-
-		struct resume_background_long
 		{
 			bool await_ready() const noexcept
 			{
@@ -59,7 +35,8 @@ namespace corsl
 			{
 				auto callback = [](PTP_CALLBACK_INSTANCE pci, void * context)
 				{
-					CallbackMayRunLong(pci);
+					if constexpr (is_long)
+						CallbackMayRunLong(pci);
 					std::experimental::coroutine_handle<>::from_address(context)();
 				};
 
@@ -334,15 +311,50 @@ namespace corsl
 				throw_last_error();
 			}
 		}
+
+		template<bool noexcept_ = false>
+		struct fire_and_forget
+		{
+			struct promise_type
+			{
+				fire_and_forget get_return_object() const noexcept
+				{
+					return{};
+				}
+
+				void return_void() const noexcept
+				{
+				}
+
+				void unhandled_exception() const noexcept
+				{
+					if constexpr (noexcept_)
+						std::terminate();
+				}
+
+				std::experimental::suspend_never initial_suspend() const noexcept
+				{
+					return{};
+				}
+
+				std::experimental::suspend_never final_suspend() const noexcept
+				{
+					return{};
+				}
+			};
+		};
 	}
 
-	using details::resume_background;
-	using details::resume_background_long;
+	using resume_background = details::resume_background<false>;
+	using resume_background_long = details::resume_background<true>;
 	using details::resume_after;
 	using details::resume_on_signal;
 	using details::resumable_io;
 
 	using details::resume_on_background;
+
+	using fire_and_forget = details::fire_and_forget<false>;
+	using fire_and_forget_noexcept = details::fire_and_forget<true>;
 
 	namespace timer
 	{

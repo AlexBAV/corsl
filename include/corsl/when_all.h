@@ -25,7 +25,7 @@ namespace corsl
 			result_type<void>,
 			decltype(get_result_type(task))
 			>,
-			winrt::fire_and_forget
+			fire_and_forget<>
 			>
 		{
 			try
@@ -46,7 +46,7 @@ namespace corsl
 			result_type<void>,
 			decltype(get_result_type(task))
 			>,
-			winrt::fire_and_forget
+			fire_and_forget<>
 			>
 		{
 			try
@@ -306,7 +306,7 @@ namespace corsl
 
 		// non-void
 		template<class Master, class Awaitable>
-		inline winrt::fire_and_forget range_when_all_helper_single(Master &master, Awaitable task, size_t index) noexcept
+		inline fire_and_forget<> range_when_all_helper_single(Master &master, Awaitable task, size_t index) noexcept
 		{
 			try
 			{

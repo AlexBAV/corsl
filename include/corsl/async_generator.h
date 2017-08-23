@@ -26,7 +26,7 @@ namespace corsl
 			{
 				promise<T> current;
 
-				void init_frame()
+				void init_frame() noexcept
 				{
 					current = {};
 				}
@@ -37,9 +37,9 @@ namespace corsl
 					current.set(std::forward<V>(value));
 				}
 
-				void set_exception(std::exception_ptr exception_) noexcept
+				void unhandled_exception() noexcept
 				{
-					current.set_exception(std::move(exception_));
+					current.set_exception(std::current_exception());
 				}
 
 				auto get_future() const noexcept

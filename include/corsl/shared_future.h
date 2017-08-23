@@ -32,9 +32,9 @@ namespace corsl
 			mode mode { mode::not_started };
 			std::vector<std::experimental::coroutine_handle<>> continuations;
 
-			winrt::fire_and_forget start()
+			fire_and_forget<> start()
 			{
-				co_await resume_background{};
+				co_await resume_background<>{};
 				try
 				{
 					co_await future_;
