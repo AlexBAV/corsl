@@ -140,7 +140,7 @@ namespace corsl
 			future<T> get_return_object() noexcept
 			{
 				add_ref();
-				return { this };
+				return { std::experimental::coroutine_handle<promise_type_>::from_promise(*this) };
 			}
 
 			void add_ref() noexcept
@@ -192,20 +192,21 @@ namespace corsl
 			static_assert(!std::is_reference_v<T>, "future<T> is not allowed for reference types");
 
 			using promise_type_ = promise_type_<T>;
-			promise_type_ *promise;
+			using coro_type = std::experimental::coroutine_handle<promise_type_>;
+			coro_type coro;
 
-			future(promise_type_ *promise) noexcept :
-			promise{ promise }
+			future(coro_type coro) noexcept :
+				coro{ coro }
 			{}
 
 			struct special_await
 			{
-				promise_type_ *promise;
+				coro_type coro;
 
 				bool await_ready() const noexcept
 				{
-					std::unique_lock<srwlock> l{ promise->lock };
-					auto ready = promise->is_ready(l);
+					std::unique_lock<srwlock> l{ coro.promise().lock };
+					auto ready = coro.promise().is_ready(l);
 					if (!ready)
 						l.release();
 					return ready;
@@ -213,8 +214,8 @@ namespace corsl
 
 				bool await_suspend(std::experimental::coroutine_handle<> resume) noexcept
 				{
-					std::unique_lock<srwlock> l{ promise->lock, std::adopt_lock };
-					return promise->start_async(resume, std::move(l));
+					std::unique_lock<srwlock> l{ coro.promise().lock, std::adopt_lock };
+					return coro.promise().start_async(resume, std::move(l));
 				}
 
 				void await_resume() noexcept
@@ -227,55 +228,55 @@ namespace corsl
 			using result_type = T;
 
 			future() noexcept :
-			promise{ nullptr }
+				coro{ nullptr }
 			{}
 
 			~future()
 			{
-				if (promise)
-					promise->release();
+				if (coro)
+					coro.promise().release();
 			}
 
 			explicit operator bool()const noexcept
 			{
-				return !!promise;
+				return !!coro;
 			}
 
 			future(const future &o) noexcept :
-			promise{ o.promise }
+				coro{ o.coro }
 			{
-				if (promise)
-					promise->add_ref();
+				if (coro)
+					coro.promise().add_ref();
 			}
 
 			future &operator =(const future &o) noexcept
 			{
-				if (promise)
-					promise->release();
-				promise = o.promise;
-				if (promise)
-					promise->add_ref();
+				if (coro)
+					coro.promise().release();
+				coro = o.coro;
+				if (coro)
+					coro.promise().add_ref();
 			}
 
 			future(future &&o) noexcept :
-			promise{ o.promise }
+				coro{ o.coro }
 			{
-				o.promise = nullptr;
+				o.coro = nullptr;
 			}
 
 			future &operator =(future &&o) noexcept
 			{
 				using std::swap;
-				swap(promise, o.promise);
+				swap(coro, o.coro);
 				return *this;
 			}
 
 			void wait() const noexcept
 			{
-				assert(promise && "Calling get() or wait() for uninitialized future is incorrect");
+				assert(coro && "Calling get() or wait() for uninitialized future is incorrect");
 				{
-					std::unique_lock<srwlock> l{ promise->lock };
-					if (promise->is_ready(l))
+					std::unique_lock<srwlock> l{ coro.promise().lock };
+					if (coro.promise().is_ready(l))
 						return;
 				}
 
@@ -285,7 +286,7 @@ namespace corsl
 
 				[&]()->fire_and_forget<>
 				{
-					co_await special_await{ promise };
+					co_await special_await{ coro };
 					const std::lock_guard<srwlock> guard{ x };
 					completed = true;
 					cv.wake_one();
@@ -298,28 +299,28 @@ namespace corsl
 			decltype(auto) get() const &
 			{
 				wait();
-				return iget(promise->get());
+				return iget(coro.promise().get());
 			}
 
 			decltype(auto) get() &&
 			{
 				wait();
-				return std::move(*this).iget(promise->get());
+				return std::move(*this).iget(coro.promise().get());
 			}
 
 			bool is_ready() const noexcept
 			{
-				assert(promise && "Calling is_ready for uninitialized future is invalid");
-				std::unique_lock<srwlock> l{ promise->lock };
-				return promise->is_ready(l);
+				assert(coro && "Calling is_ready for uninitialized future is invalid");
+				std::unique_lock<srwlock> l{ coro.promise().lock };
+				return coro.promise().is_ready(l);
 			}
 
 			// await
 			bool await_ready() const noexcept
 			{
-				assert(promise && "co_await with uninitialized future is invalid");
-				std::unique_lock<srwlock> l{ promise->lock };
-				auto ready = promise->is_ready(l);
+				assert(coro && "co_await with uninitialized future is invalid");
+				std::unique_lock<srwlock> l{ coro.promise().lock };
+				auto ready = coro.promise().is_ready(l);
 				if (!ready)
 					l.release();
 				return ready;
@@ -327,18 +328,18 @@ namespace corsl
 
 			bool await_suspend(std::experimental::coroutine_handle<> resume) noexcept
 			{
-				std::unique_lock<srwlock> l{ promise->lock, std::adopt_lock };
-				return promise->start_async(resume, std::move(l));
+				std::unique_lock<srwlock> l{ coro.promise().lock, std::adopt_lock };
+				return coro.promise().start_async(resume, std::move(l));
 			}
 
 			void iawait_resume(std::true_type)
 			{
-				promise->get();
+				coro.promise().get();
 			}
 
 			decltype(auto) iawait_resume(std::false_type)
 			{
-				return std::move(promise->get());
+				return std::move(coro.promise().get());
 			}
 
 			decltype(auto) await_resume()
