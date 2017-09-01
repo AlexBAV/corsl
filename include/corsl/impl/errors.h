@@ -45,7 +45,7 @@ namespace corsl
 					0,
 					nullptr);
 
-				return { winrt::get_abi(message), size };
+				return { message.get(), size };
 			}
 		};
 

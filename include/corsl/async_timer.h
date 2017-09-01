@@ -39,7 +39,7 @@ namespace corsl
 			//
 			auto get() const noexcept
 			{
-				return winrt::get_abi(timer);
+				return timer.get();
 			}
 
 			bool is_cancelled() const noexcept

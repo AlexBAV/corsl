@@ -69,7 +69,7 @@ namespace corsl
 				}
 
 				int64_t relative_count = -m_duration.count();
-				SetThreadpoolTimer(winrt::get_abi(m_timer), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
+				SetThreadpoolTimer(m_timer.get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
 			}
 
 			void await_resume() const noexcept
@@ -123,7 +123,7 @@ namespace corsl
 
 				int64_t relative_count = -m_timeout.count();
 				PFILETIME file_time = relative_count != 0 ? reinterpret_cast<PFILETIME>(&relative_count) : nullptr;
-				SetThreadpoolWait(winrt::get_abi(m_wait), m_handle, file_time);
+				SetThreadpoolWait(m_wait.get(), m_handle, file_time);
 			}
 
 			bool await_resume() const noexcept
@@ -176,10 +176,6 @@ namespace corsl
 			resumable_io(HANDLE object) :
 				m_io(CreateThreadpoolIo(object, awaitable_base::callback, nullptr, nullptr))
 			{
-				if (!m_io)
-				{
-					throw_last_error();
-				}
 			}
 
 			template <typename F>
@@ -285,7 +281,7 @@ namespace corsl
 
 			PTP_IO get() const noexcept
 			{
-				return winrt::get_abi(m_io);
+				return m_io.get();
 			}
 
 		private:

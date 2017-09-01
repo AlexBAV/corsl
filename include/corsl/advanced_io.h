@@ -47,7 +47,7 @@ namespace corsl
 				if (timeout.count())
 				{
 					int64_t relative_count = -timeout.count();
-					SetThreadpoolTimer(winrt::get_abi(m_timer), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
+					SetThreadpoolTimer(m_timer.get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
 				}
 			}
 
@@ -55,8 +55,8 @@ namespace corsl
 			{
 				if (timeout.count())
 				{
-					SetThreadpoolTimer(winrt::get_abi(m_timer), nullptr, 0, 0);
-					WaitForThreadpoolTimerCallbacks(winrt::get_abi(m_timer), TRUE);
+					SetThreadpoolTimer(m_timer.get(), nullptr, 0, 0);
+					WaitForThreadpoolTimerCallbacks(m_timer.get(), TRUE);
 				}
 			}
 		};
@@ -193,7 +193,7 @@ namespace corsl
 
 			PTP_IO get() const noexcept
 			{
-				return winrt::get_abi(m_io);
+				return m_io.get();
 			}
 		};
 	}
