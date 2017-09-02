@@ -39,7 +39,7 @@ namespace corsl
 					value = std::move(value_);
 				}
 
-				void set_exception(std::exception_ptr &&ptr) noexcept
+				void set_exception(std::exception_ptr ptr) noexcept
 				{
 					value = std::move(ptr);
 				}
@@ -67,14 +67,14 @@ namespace corsl
 			srwlock queue_lock;
 			queue_t queue;
 			awaitable *current{ nullptr };
-			bool is_cancelled{ false };
+			std::exception_ptr exception{};
 
 			bool is_ready(std::variant<std::exception_ptr, T> &value)
 			{
 				std::unique_lock<srwlock> l{ queue_lock };
-				if (is_cancelled)
+				if (exception)
 				{
-					value = std::make_exception_ptr(operation_cancelled{});
+					value = exception;
 					return true;
 				}
 				if (!queue.empty())
@@ -89,8 +89,8 @@ namespace corsl
 			bool set_awaitable(awaitable *pointer)
 			{
 				std::unique_lock<srwlock> l{ queue_lock };
-				if (is_cancelled)
-					throw operation_cancelled{};
+				if (exception)
+					std::rethrow_exception(exception);
 				if (!queue.empty())
 				{
 					pointer->set_result(std::move(queue.front()));
@@ -107,8 +107,8 @@ namespace corsl
 				if (current)
 				{
 					auto cur = std::exchange(current, nullptr);
-					if (is_cancelled)
-						cur->set_exception(std::make_exception_ptr(operation_cancelled{}));
+					if (exception)
+						cur->set_exception(exception);
 					else
 					{
 						auto v = std::move(queue.front());
@@ -124,7 +124,7 @@ namespace corsl
 			void push(V &&item)
 			{
 				std::unique_lock<srwlock> l{ queue_lock };
-				if (!is_cancelled)
+				if (!exception)
 					queue.emplace(std::forward<V>(item));
 				drain(std::move(l));
 			}
@@ -138,7 +138,14 @@ namespace corsl
 			void cancel()
 			{
 				std::unique_lock<srwlock> l{ queue_lock };
-				is_cancelled = true;
+				exception = std::make_exception_ptr(operation_cancelled{});
+				drain(std::move(l));
+			}
+
+			void push_exception(std::exception_ptr exception_)
+			{
+				std::unique_lock<srwlock> l{ queue_lock };
+				exception = std::move(exception_);
 				drain(std::move(l));
 			}
 
