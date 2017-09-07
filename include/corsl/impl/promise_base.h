@@ -22,7 +22,7 @@ namespace corsl
 			exception
 		};
 
-		struct promise_base0
+		struct __declspec(empty_bases) promise_base0
 		{
 			srwlock lock;
 			std::experimental::coroutine_handle<> resume{};
@@ -83,7 +83,7 @@ namespace corsl
 		struct cancellation_token_transport
 		{
 			const cancellation_source &source;
-			promise_base0 *promise;
+			std::experimental::coroutine_handle<promise_base0> coro;
 
 			bool await_ready() const noexcept
 			{

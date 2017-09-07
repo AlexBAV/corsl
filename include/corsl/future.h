@@ -20,7 +20,7 @@ namespace corsl
 	{
 		// future
 		template<class T>
-		struct promise_base : promise_base0
+		struct  __declspec(empty_bases) promise_base : promise_base0
 		{
 			T value;
 
@@ -41,7 +41,7 @@ namespace corsl
 		};
 
 		template<>
-		struct promise_base<void> : promise_base0
+		struct  __declspec(empty_bases) promise_base<void> : promise_base0
 		{
 			struct empty_type {};
 			empty_type value;
@@ -61,7 +61,7 @@ namespace corsl
 		};
 
 		template<class T>
-		class future_base
+		class  __declspec(empty_bases) future_base
 		{
 		protected:
 			const T &iget(T &value) const &
@@ -76,7 +76,7 @@ namespace corsl
 		};
 
 		template<>
-		class future_base<void>
+		class  __declspec(empty_bases) future_base<void>
 		{
 		protected:
 			template<class T>
@@ -89,7 +89,7 @@ namespace corsl
 		class future;
 
 		template<class T>
-		struct promise_type_ : promise_base<T>
+		struct  __declspec(empty_bases) promise_type_ : promise_base<T>
 		{
 			std::experimental::coroutine_handle<> destroy_resume{};
 			bool future_exists{ true };
@@ -176,17 +176,17 @@ namespace corsl
 
 			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_source &source) noexcept
 			{
-				return { source, this };
+				return { source, std::experimental::coroutine_handle<promise_base0>::from_promise(*this) };
 			}
 
 			corsl::details::cancellation_token_transport await_transform(const corsl::details::cancellation_source &source) noexcept
 			{
-				return { source, this };
+				return { source, std::experimental::coroutine_handle<promise_base0>::from_promise(*this) };
 			}
 		};
 
 		template<class T = void>
-		class future : public future_base<T>
+		class  __declspec(empty_bases) future : public future_base<T>
 		{
 			friend struct promise_type_<T>;
 			static_assert(!std::is_reference_v<T>, "future<T> is not allowed for reference types");

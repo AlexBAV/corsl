@@ -97,7 +97,7 @@ namespace corsl
 			friend class cancellation_subscription_base;
 
 			std::shared_ptr<cancellation_source_body> body;
-			promise_base0 *promise{};	// associated promise
+			std::experimental::coroutine_handle<promise_base0> coro{};	// associated promise
 
 			srwlock lock;
 			bi::list<cancellation_subscription_base, bi::constant_time_size<false>> callbacks;
@@ -109,8 +109,8 @@ namespace corsl
 			{
 				std::lock_guard<srwlock> l{ lock };
 				cancelled = true;
-				if (promise)
-					promise->cancel();
+				if (coro)
+					coro.promise().cancel();
 
 				for (auto &pair : callbacks)
 					pair.run();
@@ -241,7 +241,7 @@ namespace corsl
 		inline cancellation_token::cancellation_token(cancellation_token_transport &&transport) :
 			body{ transport.source.body },
 			cancelled{ body->is_cancelled() },
-			promise{ transport.promise }
+			coro{ transport.coro }
 		{
 			// Throw immediately if source is already cancelled
 			check_cancelled();
