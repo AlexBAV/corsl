@@ -114,6 +114,8 @@ namespace corsl
 			std::shared_ptr<shared_future_impl<T>> pimpl;
 
 		public:
+			using result_type = T;
+
 			shared_future() = default;
 			shared_future(future<T> &&future) :
 				pimpl{ std::make_shared<shared_future_impl<T>>(std::move(future)) }
@@ -148,6 +150,25 @@ namespace corsl
 			auto await_resume() const
 			{
 				return pimpl->await_resume();
+			}
+
+			template<class F>
+			auto then(F continuation) ->std::invoke_result_t<F, result_type>
+			{
+				co_return co_await continuation(co_await *this);
+			}
+
+			template<class F>
+			auto then(F continuation) ->std::invoke_result_t<F, future<result_type>>
+			{
+				co_return co_await continuation(*this);
+			}
+
+			template<class F>
+			auto then(F continuation) ->std::invoke_result_t<F>
+			{
+				co_await *this;
+				co_await continuation();
 			}
 		};
 	}

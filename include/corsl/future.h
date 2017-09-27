@@ -242,21 +242,8 @@ namespace corsl
 				return !!coro;
 			}
 
-			future(const future &o) noexcept :
-				coro{ o.coro }
-			{
-				if (coro)
-					coro.promise().add_ref();
-			}
-
-			future &operator =(const future &o) noexcept
-			{
-				if (coro)
-					coro.promise().release();
-				coro = o.coro;
-				if (coro)
-					coro.promise().add_ref();
-			}
+			future(const future &o) = delete;
+			future &operator =(const future &o) = delete;
 
 			future(future &&o) noexcept :
 				coro{ o.coro }
@@ -273,7 +260,7 @@ namespace corsl
 
 			void wait() const noexcept
 			{
-				assert(coro && "Calling get() or wait() for uninitialized future is incorrect");
+				assert(coro && "Calling get() or wait() on uninitialized future is prohibited");
 				{
 					std::unique_lock<srwlock> l{ coro.promise().lock };
 					if (coro.promise().is_ready(l))
@@ -346,6 +333,26 @@ namespace corsl
 			{
 				return iawait_resume(std::is_same<T, void>{});
 			}
+
+			template<class F>
+			auto then(F continuation) && -> std::invoke_result_t<F, result_type>
+			{
+				co_return co_await continuation(co_await std::move(*this));
+			}
+
+			template<class F>
+			auto then(F continuation) && -> std::invoke_result_t<F, future<result_type>>
+			{
+				co_return co_await continuation(std::move(*this));
+			}
+
+			template<class F>
+			auto then(F continuation) && -> std::invoke_result_t<F>
+			{
+				co_await *this;
+				co_await continuation();
+			}
+
 		};
 
 		template<class F>
