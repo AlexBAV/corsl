@@ -71,6 +71,18 @@ namespace corsl
 				throw hresult_error{ hr };
 		}
 
+		inline void check_hresult(HRESULT error)
+		{
+			if (FAILED(error))
+				throw_error(error);
+		}
+
+		inline void check_win32(DWORD error)
+		{
+			if (error)
+				throw hresult_error{ HRESULT_FROM_WIN32(error) };
+		}
+
 		class timer_cancelled : public operation_cancelled
 		{
 		};
@@ -82,4 +94,6 @@ namespace corsl
 
 	using details::throw_error;
 	using details::throw_last_error;
+	using details::check_hresult;
+	using details::check_win32;
 }

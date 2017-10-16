@@ -211,10 +211,8 @@ namespace corsl
 
 					uint32_t await_resume() const
 					{
-						if (m_result != NO_ERROR && m_result != ERROR_HANDLE_EOF)
-						{
-							throw hresult_error(HRESULT_FROM_WIN32(m_result));
-						}
+						if (m_result != ERROR_HANDLE_EOF)
+							check_win32(m_result);
 
 						return static_cast<uint32_t>(m_overlapped.InternalHigh);
 					}
@@ -265,10 +263,8 @@ namespace corsl
 
 					uint32_t await_resume() const
 					{
-						if (m_result != NO_ERROR && m_result != ERROR_HANDLE_EOF)
-						{
-							throw hresult_error(HRESULT_FROM_WIN32(m_result));
-						}
+						if (m_result != ERROR_HANDLE_EOF)
+							check_win32(m_result);
 
 						return static_cast<uint32_t>(m_overlapped.InternalHigh);
 					}
