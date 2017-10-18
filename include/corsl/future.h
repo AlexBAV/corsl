@@ -127,6 +127,7 @@ namespace corsl
 					void await_suspend(std::experimental::coroutine_handle<> resume_) noexcept
 					{
 						pthis->destroy_resume = resume_;
+#pragma warning(suppress: 26110)
 						pthis->lock.unlock();
 					}
 
