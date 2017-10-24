@@ -18,45 +18,78 @@ namespace corsl
 {
 	namespace details
 	{
+		template<class value_type>
+		struct __declspec(empty_bases)promise_common : promise_base0
+		{
+			srwlock lock;
+			std::variant<std::monostate, std::exception_ptr, value_type> value;
+			std::experimental::coroutine_handle<> resume{};
+			std::atomic<int> use_count{ 0 };
+
+			bool is_ready(std::unique_lock<srwlock> &) const noexcept
+			{
+				return value.index() != 0;
+			}
+
+			void check_resume(std::unique_lock<srwlock> &&l) noexcept
+			{
+				if (resume)
+				{
+					l.unlock();
+					resume();
+				}
+			}
+
+			void internal_set_exception(std::exception_ptr &&exception) noexcept
+			{
+				std::unique_lock<srwlock> l{ lock };
+				value = std::move(exception);
+				check_resume(std::move(l));
+			}
+
+			void unhandled_exception() noexcept
+			{
+				std::unique_lock<srwlock> l{ lock };
+				value = std::current_exception();
+				check_resume(std::move(l));
+			}
+
+			void check_exception()
+			{
+				if (std::holds_alternative<std::exception_ptr>(value))
+					std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
+			}
+
+			value_type &get()
+			{
+				check_exception();
+				return *std::get_if<value_type>(&value);
+			}
+		};
+
 		// future
 		template<class T>
-		struct  __declspec(empty_bases) promise_base : promise_base0
+		struct  __declspec(empty_bases) promise_base : promise_common<T>
 		{
-			T value;
-
 			template<class V>
 			void return_value(V &&v) noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
 				value = std::forward<V>(v);
-				status = status_t::ready;
 				check_resume(std::move(l));
-			}
-
-			T &get()
-			{
-				check_exception();
-				return value;
 			}
 		};
 
-		template<>
-		struct  __declspec(empty_bases) promise_base<void> : promise_base0
-		{
-			struct empty_type {};
-			empty_type value;
+		struct empty_type {};
 
+		template<>
+		struct  __declspec(empty_bases) promise_base<void> : promise_common<empty_type>
+		{
 			void return_void() noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
-				status = status_t::ready;
+				value = empty_type{};
 				check_resume(std::move(l));
-			}
-
-			empty_type &get()
-			{
-				check_exception();
-				return value;
 			}
 		};
 

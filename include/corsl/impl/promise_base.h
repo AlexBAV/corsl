@@ -15,27 +15,16 @@ namespace corsl
 {
 	namespace details
 	{
-		enum class status_t
-		{
-			running,
-			ready,
-			exception
-		};
+		//enum class status_t
+		//{
+		//	running,
+		//	ready,
+		//	exception
+		//};
 
 		struct __declspec(empty_bases) promise_base0
 		{
-			srwlock lock;
-			std::experimental::coroutine_handle<> resume{};
-			std::exception_ptr exception;
-			std::atomic<int> use_count{ 0 };
 			std::atomic<bool> cancelled{ false };
-
-			status_t status{ status_t::running };
-
-			bool is_ready(std::unique_lock<srwlock> &) const noexcept
-			{
-				return status != status_t::running;
-			}
 
 			bool is_cancelled() const noexcept
 			{
@@ -45,37 +34,6 @@ namespace corsl
 			void cancel() noexcept
 			{
 				cancelled.store(true, std::memory_order_relaxed);
-			}
-
-			void check_resume(std::unique_lock<srwlock> &&l) noexcept
-			{
-				if (resume)
-				{
-					l.unlock();
-					resume();
-				}
-			}
-
-			void internal_set_exception(std::exception_ptr &&exception_) noexcept
-			{
-				std::unique_lock<srwlock> l{ lock };
-				exception = std::move(exception_);
-				status = status_t::exception;
-				check_resume(std::move(l));
-			}
-
-			void unhandled_exception() noexcept
-			{
-				std::unique_lock<srwlock> l{ lock };
-				exception = std::current_exception();
-				status = status_t::exception;
-				check_resume(std::move(l));
-			}
-
-			void check_exception()
-			{
-				if (status == status_t::exception && exception)
-					std::rethrow_exception(exception);
 			}
 		};
 

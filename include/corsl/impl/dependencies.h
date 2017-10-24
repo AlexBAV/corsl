@@ -20,5 +20,6 @@
 #include <functional>
 #include <cassert>
 #include <experimental/resumable>
+#include <variant>
 
 #include <winrt/base.h>
