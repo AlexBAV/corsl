@@ -51,6 +51,17 @@ namespace corsl
 					resume_on_background(handle);
 			}
 
+			corsl::future<> get_wait_future()
+			{
+				try
+				{
+					co_await *this;
+				}
+				catch (...)
+				{
+				}
+			}
+
 		public:
 			shared_future_impl(future<T> &&future_) noexcept :
 				future_{ std::move(future_) }
@@ -70,12 +81,14 @@ namespace corsl
 
 			auto get()
 			{
+				wait();
 				return future_.get();
 			}
 
 			void wait() noexcept
 			{
-				future_.wait();
+				if (!is_ready())
+					get_wait_future().wait();
 			}
 
 			// await
