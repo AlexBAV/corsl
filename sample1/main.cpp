@@ -55,24 +55,24 @@ corsl::future<void> test_when_all_void_range()
 
 	co_await corsl::when_all_range(tasks1.begin(), tasks1.end());
 
-	std::vector<corsl::future<void>> tasks2
-	{
-		void_timer(first_timer_duration),
-		void_timer(second_timer_duration)
-	};
+	std::vector<corsl::future<void>> tasks2;
+	tasks2.emplace_back(void_timer(first_timer_duration));
+	tasks2.emplace_back(void_timer(second_timer_duration));
 
-	co_await corsl::when_all_range(tasks2.begin(), tasks2.end());
+	co_await corsl::when_all_range(
+		std::make_move_iterator(tasks2.begin()),
+		std::make_move_iterator(tasks2.end()));
 }
 
 corsl::future<void> test_when_all_bool_range()
 {
-	std::vector<corsl::future<bool>> tasks2
-	{
-		bool_timer(first_timer_duration),
-		bool_timer(second_timer_duration)
-	};
+	std::vector<corsl::future<bool>> tasks2;
+	tasks2.emplace_back(bool_timer(first_timer_duration));
+	tasks2.emplace_back(bool_timer(second_timer_duration));
 
-	auto result = co_await corsl::when_all_range(tasks2.begin(), tasks2.end());
+	auto result = co_await corsl::when_all_range(
+		std::make_move_iterator(tasks2.begin()), 
+		std::make_move_iterator(tasks2.end()));
 }
 
 corsl::future<void> test_when_any_void_range()
@@ -81,26 +81,25 @@ corsl::future<void> test_when_any_void_range()
 
 	co_await corsl::when_any_range(tasks1.begin(), tasks1.end());
 
-	std::vector<corsl::future<void>> tasks2
-	{
-		void_timer(first_timer_duration),
-		void_timer(second_timer_duration)
-	};
+	std::vector<corsl::future<void>> tasks2;
+	tasks2.emplace_back(void_timer(first_timer_duration));
+	tasks2.emplace_back(void_timer(second_timer_duration));
 
-	co_await corsl::when_any_range(tasks2.begin(), tasks2.end());
+	co_await corsl::when_any_range(
+		std::make_move_iterator(tasks2.begin()),
+		std::make_move_iterator(tasks2.end()));
 }
 
 corsl::future<void> test_when_any_bool_range()
 {
-	std::vector<corsl::future<bool>> tasks2
-	{
-		bool_timer(first_timer_duration),
-		bool_timer(second_timer_duration)
-	};
+	std::vector<corsl::future<bool>> tasks2;
+	tasks2.emplace_back(bool_timer(first_timer_duration));
+	tasks2.emplace_back(bool_timer(second_timer_duration));
 
-	auto result = co_await corsl::when_any_range(tasks2.begin(), tasks2.end());
+	auto result = co_await corsl::when_any_range(
+		std::make_move_iterator(tasks2.begin()),
+		std::make_move_iterator(tasks2.end()));
 }
-
 
 corsl::future<void> test_when_all_mixed()
 {
@@ -123,7 +122,7 @@ corsl::future<void> test_when_any_void()
 
 	auto timer1 = void_timer(first_timer_duration);
 	// Test when_any with IAsyncAction
-	co_await corsl::when_any(timer1, void_timer(second_timer_duration));
+	co_await corsl::when_any(std::move(timer1), void_timer(second_timer_duration));
 }
 
 corsl::future<void> test_when_any_bool()
