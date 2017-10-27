@@ -4,15 +4,15 @@
 
 `cppwinrt` was created as a language projection for Windows Runtime, which is supported by Windows 8 or later operating systems. It is impossible to use in prior Windows versions.
 
-One of the goals of `corsl` library was being able to use it under Windows Vista or later operating system.
+One of the goals of `corsl` library was being able to use it under Windows Vista or later operating systems.
 
 Library is header-only and consists of several headers. The only external dependency is `cppwinrt` library. For simplicity, there is header `all.h`, which includes all other headers, except `cancel.h` and `auto_cancel_timer.h` headers.
 
-`cancel.h` and `auto_cancel_timer.h` headers additionally depend on [`Boost.Intrusive`](http://www.boost.org/doc/libs/1_64_0/doc/html/intrusive.html) library and therefore are not included by default. `Boost.Intrusive` is a header-only library distributed with `boost`.
+`cancel.h` and `auto_cancel_timer.h` headers additionally depend on [`Boost.Intrusive`](http://www.boost.org/doc/libs/1_65_1/doc/html/intrusive.html) library and therefore are not included by default. `Boost.Intrusive` is a header-only library distributed with `boost`.
 
 ## Compiler Support
 
-The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.4).
+The library has been tested on Microsoft Visual Studio 2017 Version 15.4.1.
 
 ## Documentation
 
@@ -45,15 +45,19 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.2 (26430.
 
 `corsl::srwlock` is compatible with `std::shared_mutex` class and, therefore, may be used with lock adapters like `std::lock_guard<T>`, `std::unique_lock<T>` and `std::shared_lock<T>`.
 
+Note that this is no longer true with `cppwinrt` release 2017.10.13.1. They now have classes `mutex`, `shared_mutex`, `lock_guard` and `shared_lock_guard`, but they are still defined in their internal namespace.
+
 ### "Compatible" Versions of Awaitables from `cppwinrt`
 
-`compatible_base.h` includes copies of the following `cppwinrt` classes:  `resume_background`, `resume_after`, `resume_on_signal` and `resumable_io`.
+`compatible_base.h` includes copies of the following `cppwinrt` classes:  `resume_background`, `resume_after`, `resume_on_signal`, `resumable_io` and `fire_and_forget`.
 
 Motivation for having those classes copied into `corsl` namespace is because they use `hresult_error` class that requires Windows Runtime.
 
 `corsl` has simplified version of `hresult_error` that does not require Windows Runtime. Therefore, if the user is going to target older OS versions, these versions must be used instead of original versions from `winrt` namespace.
 
 **Note**: `winrt::hresult_error` and `corsl::hresult_error` classes are unrelated!
+
+`fire_and_forget` class is like a `void` coroutine. Use it if you don't care about the coroutine return value and do not need to await it or block wait for it.
 
 ```C++
 #include <corsl/compatible_base.h>
@@ -92,9 +96,9 @@ In addition to `resume_background` class, library has `resume_background_long` c
 #include <corsl/future.h>
 ```
 
-`corsl` introduces a light-weight awaitable class `future<T>`. It may be used as a return type for any coroutine. `T` should be `void` for coroutines returning `void`. `T` cannot be a reference type.
+`corsl` introduces a light-weight non-copyable awaitable class `future<T>`. It may be used as a return type for any coroutine. `T` should be `void` for coroutines returning `void`. `T` cannot be a reference type.
 
-`future<T>` may be copied and moved. Using `co_await` on a future suspends the current context until the coroutine produces a result. `co_await` expression then produces the result or re-throws an exception.
+`future<T>` may not be copied, but may be moved. Using `co_await` on a future suspends the current context until the coroutine produces a result. `co_await` expression then produces the result or re-throws an exception.
 
 `future<T>` provides a blocking `get` method. If coroutine throws an exception, it is re-thrown in `get` method. It also provides a blocking `wait` method. It returns only when coroutine is finished and does not throw any exceptions.
 
@@ -103,7 +107,7 @@ Using `co_await` or calling `wait` or `get` with a default-initialized `future` 
 #### Notes
 
 1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case co_await is applied to a rvalue reference (or temporary).
-2. `future<T>` must only be awaited once. Calling `get` or `wait` counts as well. Library will fire an assertion in debug mode if `future` is awaited more than once. However, it is allowed to call `get` and `wait` on already completed future.
+2. `future<T>` must only be awaited once. Calling `get` or `wait` counts as well. Library will fire an assertion in debug mode if `future` is awaited more than once. However, it is allowed to have multiple calls to `get` or `wait` on already completed future. If you need to await multiple times, use `shared_future` class instead.
 3. `future<T>` integrates with library's [cancellation support](#cancellation-support). If a cancellation source is associated with a future and it is cancelled, any `co_await` expression automatically throws an exception.
 
 ### `shared_future<T>` Class
@@ -113,6 +117,8 @@ Using `co_await` or calling `wait` or `get` with a default-initialized `future` 
 ```
 
 `shared_future<T>` class may be used to bypass a `future`'s limitation of only allowing a single continuation. If multiple continuations are required, an instance of `shared_future<T>` must be constructed from a `future<T>`. It allows any number of callers to `co_await` shared future. `shared_future<T>` is default constructible, copyable and moveable. 
+
+It also allows multiple calls to `wait` and `get` methods.
 
 Awaiting or blocking on default-constructed (or moved-from) `shared_future<T>` is an undefined behavior.
 
@@ -129,7 +135,7 @@ std::atomic<int> counter{ 0 };
 
 for (int i = 0; i < 10; ++i)
 {
-    [&](int i) -> winrt::fire_and_forget
+    [&](int i) -> corsl::fire_and_forget
     {
         using namespace std::string_literals;
         co_await corsl::resume_background{};
@@ -153,6 +159,8 @@ CloseHandle(event);
 PPL provides `task_completion_event` class that may be used to perform late completion of tasks. `corsl` provides similar functionality with a help of its `promise<T>` class. `T` is a promise result type or `void`. Reference types are not allowed.
 
 After construction, a related future object may be created by calling `get_future` method. When the operation result is received, `set` method is called to set the promise value or `set_exception` if exception has occurred. Corresponding future object is then completed and the result (or exception) is propagated to the continuation.
+
+It is prohibited to call `get_future` method multiple times. If you need multiple continuations, obtain a promise's future and then construct a `shared_future` from it.
 
 ```C++
 #include <corsl/promise.h>
@@ -321,6 +329,8 @@ If all input tasks produce `void`, `when_all` also produces `void`, otherwise, i
 
 When the list of tasks to await is not known at compile time, `when_all_range` function must be used instead. It takes a pair of iterators to a range of tasks. In this case, all tasks must be of the same type. `when_all_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies task objects during its execution.
 
+Since `future` class is not copyable, it must be moved to the `when_all_range` instead of copying or passing by reference. `std::make_move_iterator` function may be used for that.
+
 ```C++
 corsl::future<void> void_timer(TimeSpan duration)
 {
@@ -364,6 +374,8 @@ If all input tasks produce no result, `when_any` produces the index to the first
 
 When the list of tasks to await is not known at compile time, `when_any_range` function must be used instead. It takes a pair of iterators to a range of tasks. `when_any_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies task objects during its execution.
 
+Since `future` class is not copyable, it must be moved to the `when_any_range` instead of copying or passing by reference. `std::make_move_iterator` function may be used for that.
+
 ```C++
 corsl::future<void> coroutine7()
 {
@@ -381,9 +393,9 @@ corsl::future<void> coroutine7()
 #include <corsl/async_queue.h>
 ```
 
-`async_queue<T>` is an awaitable producer-consumer queue. Producer adds values to the queue by calling `push` or `emplace` methods while consumer calls `next` method to get an awaitable that produces the result from the head of a queue.
+`async_queue<T>` is an awaitable producer-consumer queue. Producer adds values to the queue by calling non-blocking `push` or `emplace` methods while consumer calls `next` method to get an awaitable that produces the result from the head of a queue.
 
-`cancel` method cancels the queue. The next (or current) continuation is immediately cancelled by getting `operation_cancelled` exception. Any subsequent `push` will be ignored.
+`cancel` method cancels the queue. The next (or current) continuation is immediately cancelled by getting `operation_cancelled` exception. Any subsequent `push` calls will be ignored.
 
 **Note**: While multiple producers are allowed to add values to a queue concurrently (actual access is synchronized with a lock), only single consumer is supported. Calling `next` from multiple coroutines or threads will lead to undefined behavior.
 
