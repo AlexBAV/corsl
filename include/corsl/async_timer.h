@@ -28,36 +28,55 @@ namespace corsl
 			{
 				CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
 			{
-				static_cast<async_timer *>(context)->resume();
+				static_cast<async_timer *>(context)->resume(false);
 			}, this, nullptr)
 			};
 
-			std::atomic_flag resumed{ false };
-			std::atomic<bool> cancelled{ false };
-			std::experimental::coroutine_handle<> resume_location{ nullptr };
+			srwlock lock;
+			std::experimental::coroutine_handle<> resume_location{};
+			bool cancellation_requested{ false };
 
 			//
-			auto get() const noexcept
+			void resume(bool background) noexcept
 			{
-				return timer.get();
+				std::unique_lock<srwlock> l{ lock };
+				auto continuation = resume_location;
+				if (continuation)
+				{
+					resume_location = {};
+					l.unlock();
+					if (background)
+						resume_on_background(continuation);
+					else
+						continuation();
+				}
 			}
 
-			bool is_cancelled() const noexcept
+			void check_cancellation(std::unique_lock<srwlock> &)
 			{
-				return cancelled.load(std::memory_order_acquire);
+				if (cancellation_requested)
+				{
+					cancellation_requested = false;
+					throw timer_cancelled{};
+				}
 			}
 
-			void resume() noexcept
+			void suspend(std::experimental::coroutine_handle<> handle, winrt::Windows::Foundation::TimeSpan duration)
 			{
-				// Waiting for callback completion may lock if the timer is cancelled
-				// We need to execute continuation on another thread
-				if (resume_location && !resumed.test_and_set())
-					resume_on_background(resume_location);
+				{
+					std::unique_lock<srwlock> l{ lock };
+					check_cancellation(l);
+					assert(!resume_location);
+					resume_location = handle;
+				}
+				int64_t relative_count = -duration.count();
+				SetThreadpoolTimer(timer.get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
 			}
 
-			void set_handle(std::experimental::coroutine_handle<> handle)
+			void check_exception()
 			{
-				resume_location = handle;
+				std::unique_lock<srwlock> l{ lock };
+				check_cancellation(l);
 			}
 
 		public:
@@ -81,29 +100,29 @@ namespace corsl
 
 					void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
 					{
-						timer->set_handle(handle);
-						int64_t relative_count = -duration.count();
-						SetThreadpoolTimer(timer->get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
+						timer->suspend(handle, duration);
 					}
 
 					void await_resume() const
 					{
-						timer->set_handle(nullptr);
-						if (timer->is_cancelled())
-							throw timer_cancelled{};
+						timer->check_exception();
 					}
 				};
 
-				resumed.clear();
+				std::unique_lock<srwlock> l{ lock };
+				cancellation_requested = false;
 				return awaiter{ this,duration };
 			}
 
 			void cancel()
 			{
-				cancelled.store(true, std::memory_order_release);
-				SetThreadpoolTimer(get(), nullptr, 0, 0);
-				WaitForThreadpoolTimerCallbacks(get(), TRUE);
-				resume();
+				{
+					std::unique_lock<srwlock> l{ lock };
+					cancellation_requested = true;
+					SetThreadpoolTimer(timer.get(), nullptr, 0, 0);
+				}
+				WaitForThreadpoolTimerCallbacks(timer.get(), TRUE);
+				resume(true);
 			}
 		};
 	}
