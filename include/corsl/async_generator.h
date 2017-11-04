@@ -23,7 +23,8 @@ namespace corsl
 		struct __declspec(empty_bases)promise_type : public promise_base0
 		{
 			mutable srwlock lock;
-			std::variant<std::monostate, T, std::exception_ptr> value;
+			using variant_t = std::variant<std::monostate, T, std::exception_ptr>;
+			variant_t value;
 			std::experimental::coroutine_handle<> continuation;
 
 			bool is_ready_impl() const noexcept
@@ -51,11 +52,38 @@ namespace corsl
 			}
 
 			template<class V>
-			void yield_value(V &&value_) noexcept
+			auto yield_value(V &&value_) noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
 				value = std::forward<V>(value_);
-				check_resume(std::move(l));
+
+				struct awaitable
+				{
+					std::unique_lock<srwlock> l;
+					promise_type *promise;
+
+					awaitable(std::unique_lock<srwlock> &&l, promise_type *promise) noexcept :
+					l{ std::move(l) },
+						promise{ promise }
+					{
+					}
+
+					bool await_ready() const noexcept
+					{
+						return false;
+					}
+
+					void await_suspend(std::experimental::coroutine_handle<>)
+					{
+						promise->check_resume(std::move(l));
+					}
+
+					void await_resume() const noexcept
+					{
+					}
+				};
+				return awaitable{ std::move(l), this };
+				//				check_resume(std::move(l));
 			}
 
 			template<class V>
@@ -91,14 +119,7 @@ namespace corsl
 
 			T get_value()
 			{
-				if (std::holds_alternative<std::exception_ptr>(value))
-					std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
-				else
-				{
-					auto result = std::get<T>(std::move(value));
-					value = {};
-					return result;
-				}
+				return std::get<T>(std::exchange(value, variant_t{}));
 			}
 
 			static std::experimental::suspend_always initial_suspend() noexcept
@@ -192,6 +213,8 @@ namespace corsl
 		public:
 			using value_type = T;
 			using reference = T;
+			using iterator_category = std::input_iterator_tag;
+			using difference_type = ptrdiff_t;
 
 			bool operator ==(sentinel) const noexcept
 			{
