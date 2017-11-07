@@ -52,11 +52,12 @@ namespace corsl
 				}
 			}
 
-			void check_cancellation(std::unique_lock<srwlock> &)
+			void check_cancellation(std::unique_lock<srwlock> &l)
 			{
 				if (cancellation_requested)
 				{
 					cancellation_requested = false;
+					l.unlock();
 					throw timer_cancelled{};
 				}
 			}
