@@ -62,6 +62,19 @@ namespace corsl
 				}
 			}
 
+			void check_exception()
+			{
+				lock.lock();
+				if (cancellation_requested)
+				{
+					cancellation_requested = false;
+					lock.unlock();
+					throw timer_cancelled{};
+				}
+				else
+					lock.unlock();
+			}
+
 			void suspend(std::experimental::coroutine_handle<> handle, winrt::Windows::Foundation::TimeSpan duration)
 			{
 				{
@@ -72,12 +85,6 @@ namespace corsl
 				}
 				int64_t relative_count = -duration.count();
 				SetThreadpoolTimer(timer.get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
-			}
-
-			void check_exception()
-			{
-				std::unique_lock<srwlock> l{ lock };
-				check_cancellation(l);
 			}
 
 		public:
