@@ -83,6 +83,16 @@ namespace corsl
 				throw hresult_error{ HRESULT_FROM_WIN32(error) };
 		}
 
+		inline void check_io(BOOL result)
+		{
+			if (!result)
+			{
+				auto err = GetLastError();
+				if (err != ERROR_IO_PENDING)
+					throw hresult_error{ HRESULT_FROM_WIN32(err) };
+			}
+		}
+
 		class timer_cancelled : public operation_cancelled
 		{
 		};
@@ -96,4 +106,5 @@ namespace corsl
 	using details::throw_last_error;
 	using details::check_hresult;
 	using details::check_win32;
+	using details::check_io;
 }
