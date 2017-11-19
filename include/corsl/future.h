@@ -13,6 +13,7 @@
 #include "impl/promise_base.h"
 
 #include "srwlock.h"
+#include "compatible_base.h"
 
 namespace corsl
 {
