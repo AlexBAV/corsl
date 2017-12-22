@@ -64,7 +64,7 @@ namespace corsl
 				}
 			};
 
-			srwlock queue_lock;
+			mutable srwlock queue_lock;
 			queue_t queue;
 			awaitable *current{ nullptr };
 			std::exception_ptr exception{};
@@ -152,6 +152,21 @@ namespace corsl
 			awaitable next() noexcept
 			{
 				return{ this };
+			}
+
+			void clear() noexcept
+			{
+				queue_t empty_queue;
+				std::scoped_lock<srwlock> l{ queue_lock };
+				queue.swap(empty_queue);
+				exception = {};
+			}
+
+			[[nodiscard]]
+			bool empty() const noexcept
+			{
+				std::scoped_lock<srwlock> l{ queue_lock };
+				return queue.empty();
 			}
 		};
 	}
