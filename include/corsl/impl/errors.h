@@ -93,6 +93,12 @@ namespace corsl
 			}
 		}
 
+		inline void check_win32_api(BOOL res)
+		{
+			if (!res)
+				throw hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
+		}
+
 		class timer_cancelled : public operation_cancelled
 		{
 		};
@@ -107,4 +113,5 @@ namespace corsl
 	using details::check_hresult;
 	using details::check_win32;
 	using details::check_io;
+	using details::check_win32_api;
 }

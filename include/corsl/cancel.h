@@ -65,7 +65,7 @@ namespace corsl
 					std::lock_guard<srwlock> l{ lock };
 					completed = false;
 				}
-				co_await resume_background<>{};
+				co_await resume_background();
 				f();
 				std::lock_guard<srwlock> l{ lock };
 				completed = true;

@@ -34,7 +34,7 @@ namespace corsl
 
 			fire_and_forget<> start()
 			{
-				co_await resume_background<>{};
+				co_await resume_background();
 				try
 				{
 					co_await future_;
