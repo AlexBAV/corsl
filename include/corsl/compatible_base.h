@@ -11,6 +11,8 @@
 #include "impl/dependencies.h"
 #include "impl/errors.h"
 
+#include "thread_pool.h"
+
 namespace corsl
 {
 	namespace details
@@ -20,7 +22,7 @@ namespace corsl
 		// which allows them to be used in Vista+
 
 		template<bool is_long = false>
-		struct resume_background
+		struct __declspec(empty_bases) resume_background_
 		{
 			bool await_ready() const noexcept
 			{
@@ -41,11 +43,53 @@ namespace corsl
 				};
 
 				if (!TrySubmitThreadpoolCallback(callback, handle.address(), nullptr))
-				{
 					throw_last_error();
-				}
 			}
 		};
+
+		// A version that takes environment variable
+		template<bool is_long = false>
+		struct __declspec(empty_bases) env_resume_background_ : resume_background_<is_long>
+		{
+			PTP_CALLBACK_ENVIRON env;
+
+			env_resume_background_(PTP_CALLBACK_ENVIRON env) noexcept :
+			env{ env }
+			{}
+
+			void await_suspend(std::experimental::coroutine_handle<> handle) const
+			{
+				auto callback = [](PTP_CALLBACK_INSTANCE pci, void * context)
+				{
+					if constexpr (is_long)
+						CallbackMayRunLong(pci);
+					std::experimental::coroutine_handle<>::from_address(context)();
+				};
+
+				if (!TrySubmitThreadpoolCallback(callback, handle.address(), env))
+					throw_last_error();
+			}
+		};
+
+		inline auto resume_background() noexcept
+		{
+			return resume_background_<false>{};
+		}
+
+		inline auto resume_background_long() noexcept
+		{
+			return resume_background_<true>{};
+		}
+
+		inline auto resume_background(callback_environment &ce) noexcept
+		{
+			return env_resume_background_<false>{ce.get()};
+		}
+
+		inline auto resume_background_long(callback_environment &ce) noexcept
+		{
+			return env_resume_background_<true>{ce.get()};
+		}
 
 		struct resume_after
 		{
@@ -293,12 +337,12 @@ namespace corsl
 			winrt::impl::handle<io_traits> m_io;
 		};
 
-		inline void resume_on_background(std::experimental::coroutine_handle<> handle)
+		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
 		{
 			if (!TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE, void * context)
 			{
 				std::experimental::coroutine_handle<>::from_address(context)();
-			}, handle.address(), nullptr))
+			}, handle.address(), env))
 			{
 				throw_last_error();
 			}
@@ -337,8 +381,8 @@ namespace corsl
 		};
 	}
 
-	using resume_background = details::resume_background<false>;
-	using resume_background_long = details::resume_background<true>;
+	using details::resume_background;
+	using details::resume_background_long;
 	using details::resume_after;
 	using details::resume_on_signal;
 	using details::resumable_io;
