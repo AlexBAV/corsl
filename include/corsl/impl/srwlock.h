@@ -84,7 +84,7 @@ namespace corsl
 			{
 				while (predicate())
 				{
-					auto ret = SleepConditionVariableSRW(&m_cv, x.get(), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)), 0);
+					auto ret = SleepConditionVariableSRW(&m_cv, x.get(), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count()), 0);
 					if (!ret)
 					{
 						if (GetLastError() == ERROR_TIMEOUT)
