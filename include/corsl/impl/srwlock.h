@@ -79,6 +79,23 @@ namespace corsl
 				}
 			}
 
+			template<typename F>
+			bool wait_while(srwlock &x, winrt::Windows::Foundation::TimeSpan timeout, const F &predicate) noexcept(noexcept(predicate()))
+			{
+				while (predicate())
+				{
+					auto ret = SleepConditionVariableSRW(&m_cv, x.get(), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(timeout)), 0);
+					if (!ret)
+					{
+						if (GetLastError() == ERROR_TIMEOUT)
+							return false;
+						else
+							assert(false);
+					}
+				}
+				return true;
+			}
+
 			void wake_one() noexcept
 			{
 				WakeConditionVariable(&m_cv);
