@@ -71,9 +71,6 @@ namespace corsl
 			shared_future_impl(const shared_future_impl &) = delete;
 			shared_future_impl &operator =(const shared_future_impl &) = delete;
 
-			shared_future_impl(shared_future_impl &&) = delete;
-			shared_future_impl &operator =(shared_future_impl &&) = delete;
-
 			bool is_ready() const noexcept
 			{
 				return future_.is_ready();
