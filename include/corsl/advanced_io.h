@@ -10,6 +10,7 @@
 
 #include "impl/dependencies.h"
 #include "impl/errors.h"
+#include "compatible_base.h"
 
 namespace corsl
 {
@@ -18,20 +19,12 @@ namespace corsl
 		template<class D>
 		class supports_timeout
 		{
-			struct timer_traits : winrt::impl::handle_traits<PTP_TIMER>
+			winrt::handle_type<timer_traits> m_timer
 			{
-				static void close(type value) noexcept
-				{
-					CloseThreadpoolTimer(value);
-				}
-			};
-
-			winrt::impl::handle<timer_traits> m_timer
-			{
-				CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
+				check_pointer(CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
 			{
 				static_cast<D *>(context)->on_timeout();
-			}, static_cast<D *>(this), nullptr)
+			}, static_cast<D *>(this), nullptr))
 			};
 			winrt::Windows::Foundation::TimeSpan timeout;
 
@@ -63,14 +56,6 @@ namespace corsl
 
 		class resumable_io_timeout
 		{
-			struct io_traits : winrt::impl::handle_traits<PTP_IO>
-			{
-				static void close(type value) noexcept
-				{
-					CloseThreadpoolIo(value);
-				}
-			};
-
 			class my_awaitable_base : public OVERLAPPED
 			{
 			protected:
@@ -170,7 +155,7 @@ namespace corsl
 				}
 			};
 
-			winrt::impl::handle<io_traits> m_io;
+			winrt::handle_type<io_traits> m_io;
 			HANDLE object;
 
 			//

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "impl/dependencies.h"
+#include "compatible_base.h"
 
 namespace corsl
 {
@@ -16,15 +17,7 @@ namespace corsl
 	{
 		class async_timer
 		{
-			struct timer_traits : winrt::impl::handle_traits<PTP_TIMER>
-			{
-				static void close(type value) noexcept
-				{
-					CloseThreadpoolTimer(value);
-				}
-			};
-
-			winrt::impl::handle<timer_traits> timer
+			winrt::handle_type<timer_traits> timer
 			{
 				CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
 			{

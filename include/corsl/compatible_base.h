@@ -21,6 +21,15 @@ namespace corsl
 		// corsl::hresult_error
 		// which allows them to be used in Vista+
 
+		template<typename T>
+		T* check_pointer(T* pointer)
+		{
+			if (!pointer)
+				throw_last_error();
+
+			return pointer;
+		}
+
 		template<bool is_long = false>
 		struct __declspec(empty_bases) resume_background_
 		{
@@ -91,6 +100,36 @@ namespace corsl
 			return env_resume_background_<true>{ce.get()};
 		}
 
+		struct timer_traits
+		{
+			using type = PTP_TIMER;
+
+			static void close(type value) noexcept
+			{
+				CloseThreadpoolTimer(value);
+			}
+
+			static constexpr type invalid() noexcept
+			{
+				return nullptr;
+			}
+		};
+
+		struct io_traits
+		{
+			using type = PTP_IO;
+
+			static void close(type value) noexcept
+			{
+				CloseThreadpoolIo(value);
+			}
+
+			static constexpr type invalid() noexcept
+			{
+				return nullptr;
+			}
+		};
+
 		struct resume_after
 		{
 			explicit resume_after(winrt::Windows::Foundation::TimeSpan duration) noexcept :
@@ -105,13 +144,7 @@ namespace corsl
 
 			void await_suspend(std::experimental::coroutine_handle<> handle)
 			{
-				m_timer = CreateThreadpoolTimer(callback, handle.address(), nullptr);
-
-				if (!m_timer)
-				{
-					throw_last_error();
-				}
-
+				m_timer = check_pointer(CreateThreadpoolTimer(callback, handle.address(), nullptr));
 				int64_t relative_count = -m_duration.count();
 				SetThreadpoolTimer(m_timer.get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
 			}
@@ -121,21 +154,12 @@ namespace corsl
 			}
 
 		private:
-
 			static void __stdcall callback(PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
 			{
 				std::experimental::coroutine_handle<>::from_address(context)();
 			}
 
-			struct timer_traits : winrt::impl::handle_traits<PTP_TIMER>
-			{
-				static void close(type value) noexcept
-				{
-					CloseThreadpoolTimer(value);
-				}
-			};
-
-			winrt::impl::handle<timer_traits> m_timer;
+			winrt::handle_type<timer_traits> m_timer;
 			winrt::Windows::Foundation::TimeSpan m_duration;
 		};
 
@@ -158,13 +182,7 @@ namespace corsl
 			void await_suspend(std::experimental::coroutine_handle<> resume)
 			{
 				m_resume = resume;
-				m_wait = CreateThreadpoolWait(callback, this, nullptr);
-
-				if (!m_wait)
-				{
-					throw_last_error();
-				}
-
+				m_wait = check_pointer(CreateThreadpoolWait(callback, this, nullptr));
 				int64_t relative_count = -m_timeout.count();
 				PFILETIME file_time = relative_count != 0 ? reinterpret_cast<PFILETIME>(&relative_count) : nullptr;
 				SetThreadpoolWait(m_wait.get(), m_handle, file_time);
@@ -184,15 +202,22 @@ namespace corsl
 				that->m_resume();
 			}
 
-			struct wait_traits : winrt::impl::handle_traits<PTP_WAIT>
+			struct wait_traits
 			{
+				using type = PTP_WAIT;
+
 				static void close(type value) noexcept
 				{
 					CloseThreadpoolWait(value);
 				}
+
+				static constexpr type invalid() noexcept
+				{
+					return nullptr;
+				}
 			};
 
-			winrt::impl::handle<wait_traits> m_wait;
+			winrt::handle_type<wait_traits> m_wait;
 			winrt::Windows::Foundation::TimeSpan m_timeout{ 0 };
 			HANDLE m_handle{};
 			uint32_t m_result{};
@@ -218,7 +243,7 @@ namespace corsl
 		struct resumable_io
 		{
 			resumable_io(HANDLE object) :
-				m_io(CreateThreadpoolIo(object, awaitable_base::callback, nullptr, nullptr))
+				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base::callback, nullptr, nullptr)))
 			{
 			}
 
@@ -325,16 +350,7 @@ namespace corsl
 			}
 
 		private:
-
-			struct io_traits : winrt::impl::handle_traits<PTP_IO>
-			{
-				static void close(type value) noexcept
-				{
-					CloseThreadpoolIo(value);
-				}
-			};
-
-			winrt::impl::handle<io_traits> m_io;
+			winrt::handle_type<io_traits> m_io;
 		};
 
 		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)

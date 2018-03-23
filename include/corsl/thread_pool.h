@@ -15,20 +15,21 @@ namespace corsl
 	{
 		class thread_pool
 		{
-			struct pool_handle : winrt::impl::handle_traits<PTP_POOL>
+			struct pool_handle_traits
 			{
-				constexpr static type invalid() noexcept
+				using type = PTP_POOL;
+				constexpr static PTP_POOL invalid() noexcept
 				{
 					return nullptr;
 				}
 
-				static void close(type handle) noexcept
+				static void close(PTP_POOL handle) noexcept
 				{
 					CloseThreadpool(handle);
 				}
 			};
 
-			winrt::impl::handle<pool_handle> pool{ CreateThreadpool(nullptr) };
+			winrt::handle_type<pool_handle_traits> pool{ CreateThreadpool(nullptr) };
 
 		public:
 			thread_pool()

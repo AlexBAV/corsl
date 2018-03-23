@@ -35,7 +35,7 @@ namespace corsl
 
 			std::wstring message() const noexcept
 			{
-				winrt::impl::handle<winrt::impl::heap_traits> message;
+				winrt::handle_type<winrt::impl::heap_traits> message;
 
 				const uint32_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					nullptr,
