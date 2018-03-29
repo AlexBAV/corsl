@@ -122,7 +122,7 @@ namespace corsl
 					cancellation_requested = true;
 					SetThreadpoolTimer(timer.get(), nullptr, 0, 0);
 				}
-//				WaitForThreadpoolTimerCallbacks(timer.get(), TRUE);
+				WaitForThreadpoolTimerCallbacks(timer.get(), TRUE);
 				resume(true);
 			}
 		};
