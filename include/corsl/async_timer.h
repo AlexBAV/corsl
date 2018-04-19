@@ -117,12 +117,16 @@ namespace corsl
 
 			void cancel()
 			{
+				bool wait = false;
 				{
 					std::unique_lock<srwlock> l{ lock };
 					cancellation_requested = true;
 					SetThreadpoolTimer(timer.get(), nullptr, 0, 0);
+					if (resume_location)
+						wait = true;
 				}
-				WaitForThreadpoolTimerCallbacks(timer.get(), TRUE);
+				if (wait)
+					WaitForThreadpoolTimerCallbacks(timer.get(), TRUE);
 				resume(true);
 			}
 		};
