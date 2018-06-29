@@ -75,8 +75,8 @@ namespace corsl
 			template<class V>
 			void return_value(V &&v) noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
-				value = std::forward<V>(v);
+				std::unique_lock l{ this->lock };
+				this->value = std::forward<V>(v);
 				check_resume(std::move(l));
 			}
 		};
@@ -131,10 +131,10 @@ namespace corsl
 			//
 			bool start_async(std::experimental::coroutine_handle<> resume_, std::unique_lock<srwlock> &&l) noexcept
 			{
-				if (is_ready(l))
+				if (this->is_ready(l))
 					return false;	// we already have a result
-				assert(!resume && "future cannot be awaited multiple times");
-				resume = resume_;
+				assert(!this->resume && "future cannot be awaited multiple times");
+				this->resume = resume_;
 				return true;
 			}
 
@@ -180,18 +180,18 @@ namespace corsl
 
 			void add_ref() noexcept
 			{
-				use_count.fetch_add(1, std::memory_order_relaxed);
+				this->use_count.fetch_add(1, std::memory_order_relaxed);
 			}
 
 			void release() noexcept
 			{
-				if (1 == use_count.fetch_sub(1, std::memory_order_relaxed))
+				if (1 == this->use_count.fetch_sub(1, std::memory_order_relaxed))
 					destroy();
 			}
 
 			void destroy() noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				std::unique_lock l{ this->lock };
 				future_exists = false;
 				if (destroy_resume)
 				{
@@ -203,7 +203,7 @@ namespace corsl
 			template<class T>
 			T &&await_transform(T &&expr)
 			{
-				if (is_cancelled())
+				if (this->is_cancelled())
 					throw operation_cancelled{};
 				else
 					return std::forward<T>(expr);

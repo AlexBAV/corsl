@@ -83,7 +83,7 @@ namespace corsl
 
 				virtual void resume() override
 				{
-					reset_timer();
+					this->reset_timer();
 					m_resume();
 				}
 
@@ -92,7 +92,7 @@ namespace corsl
 					m_io{ io },
 					object{ object },
 					F{ std::forward<F>(callback) },
-					supports_timeout_base{ timeout }
+					supports_timeout{ timeout }
 				{}
 
 				bool await_ready() const noexcept
@@ -119,14 +119,14 @@ namespace corsl
 				void call(std::true_type)
 				{
 					(*this)(*this);
-					set_timer();
+					this->set_timer();
 				}
 
 				bool call(std::false_type)
 				{
 					if ((*this)(*this))
 					{
-						set_timer();
+						this->set_timer();
 						return true;
 					}
 					else

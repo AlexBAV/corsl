@@ -31,7 +31,7 @@ namespace corsl
 			try
 			{
 				co_await task;
-				master.finished<Index>();
+				master.finished(std::integral_constant<size_t, Index>{});
 			}
 			catch (...)
 			{
@@ -51,7 +51,7 @@ namespace corsl
 		{
 			try
 			{
-				master.finished<Index>(co_await task);
+				master.finished(std::integral_constant<size_t, Index>{}, co_await task);
 			}
 			catch (...)
 			{
@@ -116,29 +116,29 @@ namespace corsl
 				when_all_awaitable_base{ static_cast<when_all_awaitable_base &&>(o) }
 			{}
 
-			template<size_t, class T>
-			void finished(const T &) noexcept
+			template<size_t N, class T>
+			void finished(std::integral_constant<size_t, N>, const T &) noexcept
 			{
-				check_resume();
+				this->check_resume();
 			}
 
-			template<size_t>
-			void finished() noexcept
+			template<size_t N>
+			void finished(std::integral_constant<size_t, N>) noexcept
 			{
-				check_resume();
+				this->check_resume();
 			}
 
 			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
 			{
-				resume = handle;
+				this->resume = handle;
 				using index_t = std::make_index_sequence<sizeof...(Awaitables)>;
-				when_all_helper(*this, std::move(awaitables), index_t{});
+				when_all_helper(*this, std::move(this->awaitables), index_t{});
 			}
 
 			void await_resume() const
 			{
-				if (exception)
-					std::rethrow_exception(exception);
+				if (this->exception)
+					std::rethrow_exception(this->exception);
 			}
 		};
 
@@ -175,33 +175,33 @@ namespace corsl
 			{}
 
 			when_all_awaitable_value(when_all_awaitable_value &&o) noexcept :
-				when_all_awaitables_base{ static_cast<when_all_awaitable_base &&>(o) }
+				when_all_awaitable_base{ static_cast<when_all_awaitable_base &&>(o) }
 			{}
 
 			template<size_t index, class T>
 			void finished(T &&result) noexcept
 			{
 				std::get<index>(results) = std::forward<T>(result);
-				check_resume();
+				this->check_resume();
 			}
 
-			template<size_t>
-			void finished() noexcept
+			template<size_t N>
+			void finished(std::integral_constant<size_t, N>) noexcept
 			{
-				check_resume();
+				this->check_resume();
 			}
 
 			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
 			{
-				resume = handle;
+				this->resume = handle;
 				using index_t = std::make_index_sequence<sizeof...(Awaitables)>;
-				when_all_helper(*this, awaitables, index_t{});
+				when_all_helper(*this, this->awaitables, index_t{});
 			}
 
 			results_t await_resume()
 			{
-				if (exception)
-					std::rethrow_exception(exception);
+				if (this->exception)
+					std::rethrow_exception(this->exception);
 				else
 					return std::move(results);
 			}
@@ -233,7 +233,6 @@ namespace corsl
 		template<class Iterator>
 		struct range_when_all_awaitable_base
 		{
-			using base_type = range_when_all_awaitable_base;
 			using value_type = typename std::iterator_traits<Iterator>::value_type;
 
 			std::exception_ptr exception;
@@ -276,31 +275,31 @@ namespace corsl
 		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Iterator>
 		{
 			range_when_all_awaitable_void(const Iterator &begin, const Iterator &end) :
-				base_type { begin,end }
+				range_when_all_awaitable_base{ begin,end }
 			{}
 
 			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) noexcept :
-				base_type { static_cast<base_type &&>(o) }
+				range_when_all_awaitable_base{ static_cast<range_when_all_awaitable_base &&>(o) }
 			{}
 
-			template<size_t>
-			void finished() noexcept
+			template<size_t N>
+			void finished(std::integral_constant<size_t, N>) noexcept
 			{
-				check_resume();
+				this->check_resume();
 			}
 
 			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
 			{
-				auto tasks{ std::move(tasks_) };
-				resume = handle;
+				auto tasks{ std::move(this->tasks_) };
+				this->resume = handle;
 				for (auto &task : tasks)
 					when_all_helper_single<0>(*this, std::move(task));
 			}
 
 			void await_resume() const
 			{
-				if (exception)
-					std::rethrow_exception(exception);
+				if (this->exception)
+					std::rethrow_exception(this->exception);
 			}
 		};
 
@@ -326,12 +325,12 @@ namespace corsl
 			results_t results;
 
 			range_when_all_awaitable_value(const Iterator &begin, const Iterator &end) :
-				base_type { begin,end },
-				results(tasks_.size())
+				range_when_all_awaitable_base{ begin,end },
+				results(this->tasks_.size())
 			{}
 
 			range_when_all_awaitable_value(range_when_all_awaitable_value &&o) noexcept :
-				base_type{ static_cast<base_type &&>(o) },
+				range_when_all_awaitable_base{ static_cast<range_when_all_awaitable_base &&>(o) },
 				results{ std::move(o.results) }
 			{}
 
@@ -339,22 +338,22 @@ namespace corsl
 			void finished(size_t index, T &&result) noexcept
 			{
 				results[index] = std::forward<T>(result);
-				check_resume();
+				this->check_resume();
 			}
 
 			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
 			{
-				resume = handle;
-				auto tasks{ std::move(tasks_) };
-				resume = handle;
+				this->resume = handle;
+				auto tasks{ std::move(this->tasks_) };
+				this->resume = handle;
 				for (size_t i = 0; i < tasks.size(); ++i)
 					range_when_all_helper_single(*this, std::move(tasks[i]), i);
 			}
 
 			results_t await_resume()
 			{
-				if (exception)
-					std::rethrow_exception(exception);
+				if (this->exception)
+					std::rethrow_exception(this->exception);
 				else
 					return std::move(results);
 			}
