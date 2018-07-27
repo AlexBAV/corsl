@@ -74,14 +74,7 @@ namespace corsl
 
 		public:
 			template<class F>
-			cancellation_subscription(cancellation_token &token, F &&f) :
-				cancellation_subscription_base { token },
-				f{ std::forward<F>(f) }
-			{
-				// Exit early if token is already cancelled
-				token.check_cancelled();
-				add();
-			}
+			cancellation_subscription(cancellation_token &token, F &&f);
 
 			~cancellation_subscription()
 			{
@@ -151,6 +144,17 @@ namespace corsl
 					throw operation_cancelled{};
 			}
 		};
+
+		template<class T>
+		template<class F>
+		inline cancellation_subscription<T>::cancellation_subscription(cancellation_token &token, F &&f) :
+			cancellation_subscription_base{ token },
+			f{ std::forward<F>(f) }
+		{
+			// Exit early if token is already cancelled
+			token.check_cancelled();
+			add();
+		}
 
 		class cancellation_source_body
 		{
