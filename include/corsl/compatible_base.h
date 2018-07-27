@@ -144,7 +144,7 @@ namespace corsl
 
 			void await_suspend(std::experimental::coroutine_handle<> handle)
 			{
-				m_timer = check_pointer(CreateThreadpoolTimer(callback, handle.address(), nullptr));
+				m_timer.attach(check_pointer(CreateThreadpoolTimer(callback, handle.address(), nullptr)));
 				int64_t relative_count = -m_duration.count();
 				SetThreadpoolTimer(m_timer.get(), reinterpret_cast<PFILETIME>(&relative_count), 0, 0);
 			}
@@ -182,7 +182,7 @@ namespace corsl
 			void await_suspend(std::experimental::coroutine_handle<> resume)
 			{
 				m_resume = resume;
-				m_wait = check_pointer(CreateThreadpoolWait(callback, this, nullptr));
+				m_wait.attach(check_pointer(CreateThreadpoolWait(callback, this, nullptr)));
 				int64_t relative_count = -m_timeout.count();
 				PFILETIME file_time = relative_count != 0 ? reinterpret_cast<PFILETIME>(&relative_count) : nullptr;
 				SetThreadpoolWait(m_wait.get(), m_handle, file_time);
