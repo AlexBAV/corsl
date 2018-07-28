@@ -109,11 +109,11 @@ namespace corsl
 		struct when_all_awaitable_void : when_all_awaitable_base<Awaitables...>
 		{
 			when_all_awaitable_void(Awaitables &&...awaitables) noexcept :
-			when_all_awaitable_base{ std::forward<Awaitables>(awaitables)... }
+				when_all_awaitable_base<Awaitables...>{ std::forward<Awaitables>(awaitables)... }
 			{}
 
 			when_all_awaitable_void(when_all_awaitable_void &&o) noexcept :
-				when_all_awaitable_base{ static_cast<when_all_awaitable_base &&>(o) }
+				when_all_awaitable_base<Awaitables...>{ static_cast<when_all_awaitable_base &&>(o) }
 			{}
 
 			template<size_t N, class T>
@@ -320,7 +320,7 @@ namespace corsl
 		template<class Iterator>
 		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Iterator>
 		{
-			using result_type = decltype(get_result_type(*tasks_.begin()));
+			using result_type = decltype(get_result_type(*this->tasks_.begin()));
 			using results_t = std::vector<std::decay_t<typename result_type::type>>;
 			results_t results;
 

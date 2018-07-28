@@ -77,7 +77,7 @@ namespace corsl
 			{
 				std::unique_lock l{ this->lock };
 				this->value = std::forward<V>(v);
-				check_resume(std::move(l));
+				this->check_resume(std::move(l));
 			}
 		};
 
