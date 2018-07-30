@@ -321,7 +321,7 @@ namespace corsl
 			decltype(auto) get() const &
 			{
 				wait();
-				return iget(coro.promise().get());
+				return this->iget(coro.promise().get());
 			}
 
 			decltype(auto) get() &&
