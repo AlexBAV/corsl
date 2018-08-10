@@ -51,10 +51,10 @@ namespace corsl
 		};
 
 		// TODO: remove std::function when MSVC starts supporting class template parameter deduction
-		template<class T = void>
+		template<class F>
 		class cancellation_subscription : public cancellation_subscription_base
 		{
-			std::function<void()> f;
+			F f;
 			bool completed{ true };
 			srwlock lock;
 			condition_variable cv;
@@ -73,7 +73,6 @@ namespace corsl
 			}
 
 		public:
-			template<class F>
 			cancellation_subscription(cancellation_token &token, F &&f);
 
 			~cancellation_subscription()
@@ -145,16 +144,17 @@ namespace corsl
 			}
 		};
 
-		template<class T>
 		template<class F>
-		inline cancellation_subscription<T>::cancellation_subscription(cancellation_token &token, F &&f) :
+		inline cancellation_subscription<F>::cancellation_subscription(cancellation_token &token, F &&f) :
 			cancellation_subscription_base{ token },
-			f{ std::forward<F>(f) }
+			f{ std::move(f) }
 		{
 			// Exit early if token is already cancelled
 			token.check_cancelled();
 			add();
 		}
+
+		using cancellation_subscription_generic = cancellation_subscription<std::function<void()>>;
 
 		class cancellation_source_body
 		{

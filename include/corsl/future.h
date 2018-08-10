@@ -19,6 +19,9 @@ namespace corsl
 {
 	namespace details
 	{
+		template<class T = void>
+		class future;
+
 		template<class value_type>
 		struct __declspec(empty_bases)promise_common : promise_base0
 		{
@@ -79,6 +82,8 @@ namespace corsl
 				this->value = std::forward<V>(v);
 				this->check_resume(std::move(l));
 			}
+
+			future<> return_value_async(T v) noexcept;
 		};
 
 		struct empty_type {};
@@ -92,6 +97,8 @@ namespace corsl
 				value = empty_type{};
 				check_resume(std::move(l));
 			}
+
+			future<> return_void_async() noexcept;
 		};
 
 		template<class T>
@@ -118,9 +125,6 @@ namespace corsl
 			{
 			}
 		};
-
-		template<class T>
-		class future;
 
 		template<class T>
 		struct  __declspec(empty_bases) promise_type_ : promise_base<T>
@@ -220,7 +224,7 @@ namespace corsl
 			}
 		};
 
-		template<class T = void>
+		template<class T>
 		class  __declspec(empty_bases) future : public future_base<T>
 		{
 			friend struct promise_type_<T>;
@@ -387,8 +391,24 @@ namespace corsl
 				co_await *this;
 				co_await continuation();
 			}
-
 		};
+
+		inline future<> promise_base<void>::return_void_async() noexcept
+		{
+			std::unique_lock<srwlock> l{ lock };
+			value = empty_type{};
+			co_await resume_background();
+			check_resume(std::move(l));
+		}
+
+		template<class T>
+		inline future<> promise_base<T>::return_value_async(T v) noexcept
+		{
+			std::unique_lock l{ this->lock };
+			this->value = std::move(v);
+			co_await resume_background();
+			this->check_resume(std::move(l));
+		}
 
 		template<class F>
 		struct is_future : std::false_type

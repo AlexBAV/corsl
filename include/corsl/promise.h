@@ -31,6 +31,18 @@ namespace corsl
 			{
 				promise_->return_void();
 			}
+
+			template<class A, class V>
+			std::enable_if_t<!std::is_same_v<void, A>> iset_async(V &&v) noexcept
+			{
+				promise_->return_value_async(std::forward<V>(v));
+			}
+
+			template<class A>
+			std::enable_if_t<std::is_same_v<void, A>> iset_async() noexcept
+			{
+				promise_->return_void_async();
+			}
 		public:
 			promise() = default;
 
@@ -39,10 +51,21 @@ namespace corsl
 				iset<T>();
 			}
 
+			void set_async() noexcept
+			{
+				iset_async<T>();
+			}
+
 			template<class V>
 			void set(V &&v) noexcept
 			{
 				iset<T>(std::forward<V>(v));
+			}
+
+			template<class V>
+			void set_async(V &&v) noexcept
+			{
+				iset_async<T>(std::forward<V>(v));
 			}
 
 			void set_exception(std::exception_ptr &&ex) noexcept

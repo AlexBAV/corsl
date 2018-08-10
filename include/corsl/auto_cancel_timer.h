@@ -17,7 +17,7 @@ namespace corsl
 	{
 		class auto_cancel_timer : public async_timer
 		{
-			cancellation_subscription<> subscription;
+			cancellation_subscription_generic subscription;
 
 		public:
 			auto_cancel_timer(cancellation_token &token) :
