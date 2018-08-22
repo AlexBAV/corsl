@@ -112,9 +112,7 @@ namespace corsl
 				when_all_awaitable_base<Awaitables...>{ std::forward<Awaitables>(awaitables)... }
 			{}
 
-			when_all_awaitable_void(when_all_awaitable_void &&o) noexcept :
-				when_all_awaitable_base<Awaitables...>{ static_cast<when_all_awaitable_base &&>(o) }
-			{}
+			when_all_awaitable_void(when_all_awaitable_void &&o) = default;
 
 			template<size_t N, class T>
 			void finished(std::integral_constant<size_t, N>, const T &) noexcept
@@ -171,17 +169,17 @@ namespace corsl
 			results_t results;
 
 			when_all_awaitable_value(Awaitables &&...awaitables) noexcept :
-			when_all_awaitable_base{ std::forward<Awaitables>(awaitables)... }
+				when_all_awaitable_base<Awaitables...>{ std::forward<Awaitables>(awaitables)... }
 			{}
 
 			when_all_awaitable_value(when_all_awaitable_value &&o) noexcept :
 				when_all_awaitable_base{ static_cast<when_all_awaitable_base &&>(o) }
 			{}
 
-			template<size_t index, class T>
-			void finished(T &&result) noexcept
+			template<size_t N, class T>
+			void finished(std::integral_constant<size_t, N>, T &&result) noexcept
 			{
-				std::get<index>(results) = std::forward<T>(result);
+				std::get<N>(results) = std::forward<T>(result);
 				this->check_resume();
 			}
 
@@ -275,7 +273,7 @@ namespace corsl
 		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Iterator>
 		{
 			range_when_all_awaitable_void(const Iterator &begin, const Iterator &end) :
-				range_when_all_awaitable_base{ begin,end }
+				range_when_all_awaitable_base<Iterator>{ begin,end }
 			{}
 
 			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) noexcept :
@@ -320,12 +318,12 @@ namespace corsl
 		template<class Iterator>
 		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Iterator>
 		{
-			using result_type = decltype(get_result_type(*this->tasks_.begin()));
+			using result_type = decltype(get_result_type(std::declval<typename range_when_all_awaitable_base<Iterator>::value_type>()));
 			using results_t = std::vector<std::decay_t<typename result_type::type>>;
 			results_t results;
 
 			range_when_all_awaitable_value(const Iterator &begin, const Iterator &end) :
-				range_when_all_awaitable_base{ begin,end },
+				range_when_all_awaitable_base<Iterator>{ begin,end },
 				results(this->tasks_.size())
 			{}
 

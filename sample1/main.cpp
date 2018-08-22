@@ -6,6 +6,8 @@
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
 //-------------------------------------------------------------------------------------------------------
 
+#include <Windows.h>
+
 #include <chrono>
 #include <iostream>
 
@@ -256,7 +258,7 @@ void test_shared_future()
 	auto lambda = [&](int i) -> corsl::fire_and_forget
 	{
 		using namespace std::string_literals;
-		co_await corsl::resume_background{};
+		co_await corsl::resume_background();
 		std::wcout << (std::to_wstring(i + 1) + L". shared_future await completed with result "s + std::to_wstring(co_await shared_future) + L"\n"s);
 		if (counter.fetch_add(1, std::memory_order_relaxed) == 9)
 			SetEvent(event);
