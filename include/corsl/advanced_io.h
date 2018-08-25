@@ -92,7 +92,7 @@ namespace corsl
 					m_io{ io },
 					object{ object },
 					F{ std::forward<F>(callback) },
-					supports_timeout{ timeout }
+					supports_timeout<awaitable<F>>{ timeout }
 				{}
 
 				bool await_ready() const noexcept
