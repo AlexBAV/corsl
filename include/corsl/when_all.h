@@ -276,9 +276,7 @@ namespace corsl
 				range_when_all_awaitable_base<Iterator>{ begin,end }
 			{}
 
-			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) noexcept :
-				range_when_all_awaitable_base{ static_cast<range_when_all_awaitable_base &&>(o) }
-			{}
+			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) = default;
 
 			template<size_t N>
 			void finished(std::integral_constant<size_t, N>) noexcept
