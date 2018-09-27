@@ -10,6 +10,9 @@
 
 #include "impl/when_all_when_any_base.h"
 
+#include <boost/mp11/list.hpp>
+#include <boost/mp11/algorithm.hpp>
+
 namespace corsl
 {
 	namespace details
@@ -23,14 +26,11 @@ namespace corsl
 
 			void finished_exception() noexcept
 			{
-				if (resume.load(std::memory_order_relaxed))
+				auto value = resume.exchange(nullptr, std::memory_order_relaxed);
+				if (value)
 				{
-					auto value = resume.exchange(nullptr, std::memory_order_relaxed);
-					if (value)
-					{
-						exception = std::current_exception();
-						value();
-					}
+					exception = std::current_exception();
+					value();
 				}
 			}
 		};
@@ -42,14 +42,11 @@ namespace corsl
 
 			void finished(size_t index_) noexcept
 			{
-				if (resume.load(std::memory_order_relaxed))
+				auto value = resume.exchange(nullptr, std::memory_order_relaxed);
+				if (value)
 				{
-					auto value = resume.exchange(nullptr, std::memory_order_relaxed);
-					if (value)
-					{
-						index = index_;
-						value();
-					}
+					index = index_;
+					value();
 				}
 			}
 		};
@@ -62,15 +59,12 @@ namespace corsl
 
 			void finished(T &&result_, size_t index_) noexcept
 			{
-				if (resume.load(std::memory_order_relaxed))
+				auto value = resume.exchange(nullptr, std::memory_order_relaxed);
+				if (value)
 				{
-					auto value = resume.exchange(nullptr, std::memory_order_relaxed);
-					if (value)
-					{
-						result = std::move(result_);
-						index = index_;
-						value();
-					}
+					result = std::move(result_);
+					index = index_;
+					value();
 				}
 			}
 		};
@@ -204,9 +198,19 @@ namespace corsl
 		inline auto when_any(Awaitables &&...awaitables)
 		{
 			static_assert(sizeof...(Awaitables) >= 2, "when_any must be passed at least two arguments");
+
+			if constexpr (are_all_same_v<decltype(get_result_type(awaitables))...>)
+			{
+				return when_any_impl(get_first_result_type(awaitables...), std::forward<Awaitables>(awaitables)...);
+			} else
+			{
+				using namespace boost::mp11;
+				using result_types = mp_unique<mp_remove<mp_list<decltype(get_result_type(awaitables))...>>, result_type<void>>;
+				return when_any_impl(std::get_first_result_type(awaitables...), std::forward<Awaitables>(awaitables)...);
+
+
 			static_assert(are_all_same_v<decltype(get_result_type(awaitables))...>, "when_any requires all awaitables to produce the same type");
 
-			return when_any_impl(get_first_result_type(awaitables...), std::forward<Awaitables>(awaitables)...);
 		}
 
 		// range
