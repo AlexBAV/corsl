@@ -27,13 +27,26 @@ namespace corsl
 			using type = T;
 		};
 
+		// Get real type back from result_type<T>
+		template<class T>
+		using invoke_result = typename T::type;
+
+		// overload for IAsyncAction
 		constexpr result_type<void> get_result_type(const ::winrt::Windows::Foundation::IAsyncAction &)
 		{
 			return {};
 		}
 
+		// overload for IAsyncOperation<T>
 		template<class T>
 		constexpr result_type<T> get_result_type(const ::winrt::Windows::Foundation::IAsyncOperation<T> &)
+		{
+			return {};
+		}
+
+		// overload for IAsyncOperationWithProgress<T, V>
+		template<class T, class V>
+		constexpr result_type<T> get_result_type(const ::winrt::Windows::Foundation::IAsyncOperationWithProgress<T, V> &)
 		{
 			return {};
 		}
