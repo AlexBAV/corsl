@@ -14,10 +14,17 @@ namespace corsl
 {
 	namespace details
 	{
+		// forward declarations
+		template<class T>
+		class future;
+
+		template<class T>
+		class shared_future;
+
 		// no_result will substitute 'void' in tuple
 		struct no_result {};
 
-		// get_result_type 
+		// get_result_type
 		// get the coroutine result type
 		// supports IAsyncAction, IAsyncOperation<T> and awaitable object that implements await_resume
 		// yields result_type<T> where T is a coroutine result type
@@ -30,6 +37,29 @@ namespace corsl
 		// Get real type back from result_type<T>
 		template<class T>
 		using invoke_result = typename T::type;
+
+		// Overloads for future and shared_future
+		constexpr result_type<void> get_result_type(const future<void> &)
+		{
+			return {};
+		}
+
+		constexpr result_type<void> get_result_type(const shared_future<void> &)
+		{
+			return {};
+		}
+
+		template<class T>
+		constexpr result_type<T> get_result_type(const future<T> &)
+		{
+			return {};
+		}
+
+		template<class T>
+		constexpr result_type<T> get_result_type(const shared_future<T> &)
+		{
+			return {};
+		}
 
 		// overload for IAsyncAction
 		constexpr result_type<void> get_result_type(const ::winrt::Windows::Foundation::IAsyncAction &)
