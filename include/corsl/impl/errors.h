@@ -58,17 +58,22 @@ namespace corsl
 			{}
 		};
 
-		[[noreturn]] inline void throw_last_error()
-		{
-			throw hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
-		}
-
 		[[noreturn]] inline void throw_error(HRESULT hr)
 		{
 			if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
 				throw operation_cancelled{};
 			else
 				throw hresult_error{ hr };
+		}
+
+		[[noreturn]] inline void throw_win32_error(DWORD err)
+		{
+			throw_error(HRESULT_FROM_WIN32(err));
+		}
+
+		[[noreturn]] inline void throw_last_error()
+		{
+			throw_win32_error(GetLastError());
 		}
 
 		inline void check_hresult(HRESULT error)
@@ -109,6 +114,7 @@ namespace corsl
 	using details::timer_cancelled;
 
 	using details::throw_error;
+	using details::throw_win32_error;
 	using details::throw_last_error;
 	using details::check_hresult;
 	using details::check_win32;
