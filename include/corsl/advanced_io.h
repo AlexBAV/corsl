@@ -11,6 +11,7 @@
 #include "impl/dependencies.h"
 #include "impl/errors.h"
 #include "compatible_base.h"
+#include "cancel.h"
 
 namespace corsl
 {
@@ -181,8 +182,89 @@ namespace corsl
 				return m_io.get();
 			}
 		};
+
+		class cancellable_resumable_io
+		{
+			winrt::handle_type<io_traits> m_io;
+			HANDLE h;
+
+		public:
+			cancellable_resumable_io(HANDLE object) :
+				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base::callback, nullptr, nullptr))),
+				h{ object }
+			{
+			}
+
+			template <typename F>
+			auto start(F callback, cancellation_token &token)
+			{
+				class awaitable : public awaitable_base, public F
+				{
+					cancellation_subscription<std::function<void()>> subscription;
+					mutable std::atomic_flag completion{ };
+					PTP_IO m_io;
+					HANDLE h;
+
+					void oncancel()
+					{
+						if (!completion.test_and_set())
+							::CancelIoEx(h, &m_overlapped);
+					}
+
+				public:
+					awaitable(PTP_IO io, HANDLE h, F callback, cancellation_token &token) noexcept :
+						m_io{ io },
+						h{ h },
+						F{ callback },
+						subscription{ token, [this]
+						{
+							oncancel();
+						} }
+					{}
+
+					bool await_ready() const noexcept
+					{
+						return false;
+					}
+
+					void await_suspend(std::experimental::coroutine_handle<> resume_handle)
+					{
+						m_resume = resume_handle;
+						StartThreadpoolIo(m_io);
+
+						try
+						{
+							(*this)(m_overlapped);
+						}
+						catch (...)
+						{
+							CancelThreadpoolIo(m_io);
+							throw;
+						}
+					}
+
+					uint32_t await_resume() const
+					{
+						completion.test_and_set();
+						if (m_result != ERROR_HANDLE_EOF)
+							check_win32(m_result);
+
+						return static_cast<uint32_t>(m_overlapped.InternalHigh);
+					}
+				};
+
+				return awaitable(get(), h, callback, token);
+			}
+
+			PTP_IO get() const noexcept
+			{
+				return m_io.get();
+			}
+		};
+
 	}
 
 	using details::supports_timeout;
 	using details::resumable_io_timeout;
+	using details::cancellable_resumable_io;
 }
