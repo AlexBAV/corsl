@@ -112,8 +112,6 @@ namespace corsl
 				when_all_awaitable_base<Awaitables...>{ std::forward<Awaitables>(awaitables)... }
 			{}
 
-			when_all_awaitable_void(when_all_awaitable_void &&o) = default;
-
 			template<size_t N, class T>
 			void finished(std::integral_constant<size_t, N>, const T &) noexcept
 			{
@@ -276,8 +274,6 @@ namespace corsl
 				range_when_all_awaitable_base<Iterator>{ begin,end }
 			{}
 
-			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) = default;
-
 			template<size_t N>
 			void finished(std::integral_constant<size_t, N>) noexcept
 			{
@@ -323,11 +319,6 @@ namespace corsl
 			range_when_all_awaitable_value(const Iterator &begin, const Iterator &end) :
 				range_when_all_awaitable_base<Iterator>{ begin,end },
 				results(this->tasks_.size())
-			{}
-
-			range_when_all_awaitable_value(range_when_all_awaitable_value &&o) noexcept :
-				range_when_all_awaitable_base{ static_cast<range_when_all_awaitable_base &&>(o) },
-				results{ std::move(o.results) }
 			{}
 
 			template<class T>
