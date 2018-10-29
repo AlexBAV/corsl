@@ -243,13 +243,6 @@ namespace corsl
 				counter{ static_cast<int>(tasks_.size()) }
 			{}
 
-			range_when_all_awaitable_base(range_when_all_awaitable_base &&o) noexcept :
-				exception{ std::move(o.exception) },
-				counter{ o.counter.load(std::memory_order_relaxed) },	// it is safe to "move" atomic this way because we don't "use" it until the final instance is allocated
-				resume{ o.resume },
-				tasks_{ std::move(o.tasks_) }
-			{}
-
 			void finished_exception() noexcept
 			{
 				if (!exception)
@@ -275,8 +268,6 @@ namespace corsl
 			range_when_all_awaitable_void(const Iterator &begin, const Iterator &end) :
 				range_when_all_awaitable_base<Iterator>{ begin,end }
 			{}
-
-			range_when_all_awaitable_void(range_when_all_awaitable_void &&o) = default;
 
 			template<size_t N>
 			void finished(std::integral_constant<size_t, N>) noexcept

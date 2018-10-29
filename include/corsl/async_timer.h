@@ -32,11 +32,10 @@ namespace corsl
 			//
 			void resume(bool background) noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
-				auto continuation = resume_location;
+				std::unique_lock l{ lock };
+				auto continuation = std::exchange(resume_location, std::experimental::coroutine_handle<>{});
 				if (continuation)
 				{
-					resume_location = {};
 					l.unlock();
 					if (background)
 						resume_on_background(continuation);
@@ -71,7 +70,7 @@ namespace corsl
 			void suspend(std::experimental::coroutine_handle<> handle, winrt::Windows::Foundation::TimeSpan duration)
 			{
 				{
-					std::unique_lock<srwlock> l{ lock };
+					std::unique_lock l{ lock };
 					check_cancellation(l);
 					assert(!resume_location);
 					resume_location = handle;

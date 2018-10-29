@@ -21,16 +21,21 @@ namespace corsl
 			HRESULT m_code{ E_FAIL };
 
 		public:
-			hresult_error() = default;
+			constexpr hresult_error() = default;
 
-			explicit hresult_error(const HRESULT code) noexcept :
-			m_code{ code }
+			explicit constexpr hresult_error(const HRESULT code) noexcept :
+				m_code{ code }
 			{
 			}
 
-			HRESULT code() const noexcept
+			constexpr HRESULT code() const noexcept
 			{
 				return m_code;
+			}
+
+			constexpr bool is_aborted() const noexcept
+			{
+				return m_code == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
 			}
 
 			std::wstring message() const noexcept
