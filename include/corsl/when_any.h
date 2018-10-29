@@ -159,7 +159,10 @@ namespace corsl
 
 			if constexpr (mp_apply<mp_same, result_types>{})
 			{
-				return when_any_impl<invoke_result<mp_first<result_types>>>(std::forward<Awaitables>(awaitables)...);
+				if constexpr(std::is_same_v<void, invoke_result<mp_first<result_types>>>)
+					return when_any_impl<mp_first<result_types>>(std::forward<Awaitables>(awaitables)...);
+				else
+					return when_any_impl<invoke_result<mp_first<result_types>>>(std::forward<Awaitables>(awaitables)...);
 			}
 			else
 			{
