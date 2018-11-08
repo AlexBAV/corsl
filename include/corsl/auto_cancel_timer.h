@@ -9,18 +9,22 @@
 #pragma once
 
 #include "async_timer.h"
+#include "tp_timer.h"
 #include "cancel.h"
 
 namespace corsl
 {
 	namespace details
 	{
-		class auto_cancel_timer : public async_timer
+		template<class timer_t>
+		class auto_cancel_timer : public timer_t
 		{
 			cancellation_subscription_generic subscription;
 
 		public:
-			auto_cancel_timer(cancellation_token &token) :
+			template<class...Args>
+			auto_cancel_timer(cancellation_token &token, Args &&...args) :
+				timer_t{ std::forward<Args>(args)... },
 				subscription{ token,[this]() noexcept {
 					this->cancel();
 				}
@@ -30,5 +34,6 @@ namespace corsl
 		};
 	}
 
-	using details::auto_cancel_timer;
+	using auto_cancel_timer = details::auto_cancel_timer<details::async_timer>;
+	using auto_cancel_tp_timer = details::auto_cancel_timer<details::tp_timer>;
 }
