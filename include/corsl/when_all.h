@@ -241,6 +241,24 @@ namespace corsl
 				counter{ static_cast<int>(tasks_.size()) }
 			{}
 
+			range_when_all_awaitable_base(range_when_all_awaitable_base &&o) noexcept :
+				exception{ std::move(o.exception) },
+				tasks_{ std::move(o.tasks_) },
+				counter{ o.counter.load(std::memory_order_relaxed) },
+				resume{ std::move(o.resume) }
+			{}
+
+			range_when_all_awaitable_base &operator =(range_when_all_awaitable_base &&o) noexcept
+			{
+				using std::swap;
+				swap(exception, o.exception);
+				swap(tasks_, o.tasks_);
+				swap(resume, o.resume);
+				counter.store(o.load(std::memory_order_relaxed), std::memory_order_relaxed);
+
+				return *this;
+			}
+
 			void finished_exception() noexcept
 			{
 				if (!exception)
