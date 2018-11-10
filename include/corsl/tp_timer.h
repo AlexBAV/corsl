@@ -79,11 +79,11 @@ namespace corsl
 			}
 
 		public:
-			tp_timer(callback_environment &ce) : tp_timer(ce.get())
+			tp_timer(callback_environment &ce) noexcept : tp_timer(ce.get())
 			{
 			}
 
-			tp_timer() : tp_timer(nullptr)
+			tp_timer() noexcept : tp_timer(nullptr)
 			{
 			}
 
@@ -103,7 +103,7 @@ namespace corsl
 						return false;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
+					void await_suspend(std::experimental::coroutine_handle<> handle)
 					{
 						timer->suspend(handle);
 					}
@@ -132,15 +132,14 @@ namespace corsl
 				resume(true);
 			}
 
-			void start(winrt::Windows::Foundation::TimeSpan duration, winrt::Windows::Foundation::TimeSpan period = {})
+			void start(winrt::Windows::Foundation::TimeSpan duration, winrt::Windows::Foundation::TimeSpan period = {}) noexcept
 			{
 				int64_t relative_count = -duration.count();
 				SetThreadpoolTimer(timer.get(), reinterpret_cast<PFILETIME>(&relative_count), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(period).count()), 0);
 			}
 
-			void start(winrt::Windows::Foundation::DateTime when, winrt::Windows::Foundation::TimeSpan period = {})
+			void start(winrt::Windows::Foundation::DateTime when, winrt::Windows::Foundation::TimeSpan period = {}) noexcept
 			{
-				// TODO: check if the correct epoch is used
 				int64_t relative_count = when.time_since_epoch().count();
 				SetThreadpoolTimer(timer.get(), reinterpret_cast<PFILETIME>(&relative_count), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(period).count()), 0);
 			}
