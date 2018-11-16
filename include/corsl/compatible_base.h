@@ -349,6 +349,10 @@ namespace corsl
 				return m_io.get();
 			}
 
+			void wait_for_callbacks(bool cancel_pending_callbacks) const noexcept
+			{
+				WaitForThreadpoolIoCallbacks(get(), cancel_pending_callbacks);
+			}
 		private:
 			winrt::handle_type<io_traits> m_io;
 		};
