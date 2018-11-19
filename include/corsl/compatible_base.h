@@ -357,15 +357,39 @@ namespace corsl
 			winrt::handle_type<io_traits> m_io;
 		};
 
-		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
+		template<class resume_policy>
+		inline void resume_on_background(resume_policy, std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
 		{
-			if (!TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE, void * context)
+			if (!TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE pci, void * context)
 			{
+				resume_policy::init_callback(pci);
 				std::experimental::coroutine_handle<>::from_address(context)();
 			}, handle.address(), env))
 			{
 				throw_last_error();
 			}
+		}
+
+		struct empty_resume_policy
+		{
+			static constexpr void init_callback(PTP_CALLBACK_INSTANCE) noexcept
+			{
+			}
+		};
+
+		struct advanced_resume_policy
+		{
+			inline static thread_local PTP_CALLBACK_INSTANCE current_callback{};
+
+			static void init_callback(PTP_CALLBACK_INSTANCE pci) noexcept
+			{
+				current_callback = pci;
+			}
+		};
+
+		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
+		{
+			resume_on_background(empty_resume_policy{}, handle, env);
 		}
 
 		template<bool noexcept_ = false>
@@ -418,5 +442,10 @@ namespace corsl
 		{
 			return resume_after{ timeout };
 		}
+	}
+
+	[[nodiscard]] inline PTP_CALLBACK_INSTANCE get_current_callback() noexcept
+	{
+		return details::advanced_resume_policy::current_callback;
 	}
 }
