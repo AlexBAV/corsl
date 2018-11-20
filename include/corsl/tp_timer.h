@@ -16,6 +16,7 @@ namespace corsl
 {
 	namespace details
 	{
+		template<class CallbackPolicy = callback_policy::empty>
 		class tp_timer
 		{
 			winrt::handle_type<timer_traits> timer;
@@ -25,8 +26,9 @@ namespace corsl
 
 			//
 			tp_timer(PTP_CALLBACK_ENVIRON pce) noexcept :
-				timer{ CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
+				timer{ CreateThreadpoolTimer([](PTP_CALLBACK_INSTANCE pci, void * context, PTP_TIMER) noexcept
 			{
+				CallbackPolicy::init_callback(pci);
 				static_cast<tp_timer *>(context)->resume(false);
 			}, this, pce) }
 			{
@@ -41,7 +43,7 @@ namespace corsl
 				{
 					l.unlock();
 					if (background)
-						resume_on_background(continuation);
+						resume_on_background<CallbackPolicy>(continuation);
 					else
 						continuation();
 				}
@@ -145,5 +147,8 @@ namespace corsl
 			}
 		};
 	}
-	using details::tp_timer;
+	template<class CallbackPolicy>
+	using tp_timer_ex = details::tp_timer<CallbackPolicy>;
+
+	using tp_timer = details::tp_timer<>;
 }

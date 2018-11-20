@@ -34,8 +34,12 @@ namespace corsl
 		};
 	}
 
-	template<class CallbackPolicy = callback_policy::empty>
+	using auto_cancel_timer = details::auto_cancel_timer<details::async_timer<>>;
+	using auto_cancel_tp_timer = details::auto_cancel_timer<details::tp_timer<>>;
+
+	template<class CallbackPolicy>
 	using auto_cancel_timer_ex = details::auto_cancel_timer<details::async_timer<CallbackPolicy>>;
-	using auto_cancel_timer = details::auto_cancel_timer<details::async_timer<details::callback_policy::empty>>;
-	using auto_cancel_tp_timer = details::auto_cancel_timer<details::tp_timer>;
+
+	template<class CallbackPolicy>
+	using auto_cancel_tp_timer_ex = details::auto_cancel_timer<details::tp_timer<>>;
 }
