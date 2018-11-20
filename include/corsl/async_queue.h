@@ -19,7 +19,7 @@ namespace corsl
 {
 	namespace details
 	{
-		template<class T, class Queue = std::queue<T>>
+		template<class T, class Queue = std::queue<T>, class CallbackPolicy = callback_policy::empty>
 		class async_queue
 		{
 			using queue_t = Queue;
@@ -115,7 +115,7 @@ namespace corsl
 						cur->set_result(std::move(v));
 						queue.pop();
 					}
-					resume_on_background(cur->handle);
+					resume_on_background<CallbackPolicy>(cur->handle);
 				}
 			}
 

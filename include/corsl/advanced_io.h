@@ -183,6 +183,7 @@ namespace corsl
 			}
 		};
 
+		template<class CallbackPolicy = callback_policy::empty>
 		class cancellable_resumable_io
 		{
 			winrt::handle_type<io_traits> m_io;
@@ -190,7 +191,7 @@ namespace corsl
 
 		public:
 			cancellable_resumable_io(HANDLE object) :
-				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base::callback, nullptr, nullptr))),
+				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base<CallbackPolicy>::callback, nullptr, nullptr))),
 				h{ object }
 			{
 			}
@@ -198,7 +199,7 @@ namespace corsl
 			template <typename F>
 			auto start(F callback, cancellation_token &token)
 			{
-				class awaitable : public awaitable_base, public F
+				class awaitable : public awaitable_base<CallbackPolicy>, public F
 				{
 					cancellation_subscription<std::function<void()>> subscription;
 					mutable std::atomic_flag completion{ };
@@ -262,6 +263,7 @@ namespace corsl
 			}
 		};
 
+		cancellable_resumable_io()->cancellable_resumable_io<callback_policy::empty>;
 	}
 
 	using details::supports_timeout;

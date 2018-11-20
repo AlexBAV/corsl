@@ -17,8 +17,7 @@ namespace corsl
 {
 	namespace details
 	{
-		// The following resumeables are copied from winrt namespace but use
-		// corsl::hresult_error
+		// Some of the following classes are based on winrt implementation but use corsl::hresult_error,
 		// which allows them to be used in Vista+
 
 		template<typename T>
@@ -30,7 +29,27 @@ namespace corsl
 			return pointer;
 		}
 
-		template<bool is_long = false>
+		namespace callback_policy
+		{
+			struct empty
+			{
+				static constexpr void init_callback(PTP_CALLBACK_INSTANCE) noexcept
+				{
+				}
+			};
+
+			struct store
+			{
+				inline static thread_local PTP_CALLBACK_INSTANCE current_callback{};
+
+				static void init_callback(PTP_CALLBACK_INSTANCE pci) noexcept
+				{
+					current_callback = pci;
+				}
+			};
+		}
+
+		template<bool is_long = false, class CallbackPolicy = callback_policy::empty>
 		struct __declspec(empty_bases) resume_background_
 		{
 			bool await_ready() const noexcept
@@ -48,6 +67,7 @@ namespace corsl
 				{
 					if constexpr (is_long)
 						CallbackMayRunLong(pci);
+					CallbackPolicy::init_callback(pci);
 					std::experimental::coroutine_handle<>::from_address(context)();
 				};
 
@@ -57,13 +77,13 @@ namespace corsl
 		};
 
 		// A version that takes environment variable
-		template<bool is_long = false>
-		struct __declspec(empty_bases) env_resume_background_ : resume_background_<is_long>
+		template<bool is_long = false, class CallbackPolicy = callback_policy::empty>
+		struct __declspec(empty_bases) env_resume_background_ : resume_background_<is_long, CallbackPolicy>
 		{
 			PTP_CALLBACK_ENVIRON env;
 
 			env_resume_background_(PTP_CALLBACK_ENVIRON env) noexcept :
-			env{ env }
+				env{ env }
 			{}
 
 			void await_suspend(std::experimental::coroutine_handle<> handle) const
@@ -72,6 +92,7 @@ namespace corsl
 				{
 					if constexpr (is_long)
 						CallbackMayRunLong(pci);
+					CallbackPolicy::init_callback(pci);
 					std::experimental::coroutine_handle<>::from_address(context)();
 				};
 
@@ -80,25 +101,51 @@ namespace corsl
 			}
 		};
 
+		template<class CallbackPolicy>
 		inline auto resume_background() noexcept
 		{
-			return resume_background_<false>{};
+			return resume_background_<false, CallbackPolicy>{};
+		}
+
+		template<class CallbackPolicy>
+		inline auto resume_background_long() noexcept
+		{
+			return resume_background_<true, CallbackPolicy>{};
+		}
+
+		inline auto resume_background() noexcept
+		{
+			return resume_background<callback_policy::empty>();
 		}
 
 		inline auto resume_background_long() noexcept
 		{
-			return resume_background_<true>{};
+			return resume_background_long<callback_policy::empty>();
+		}
+
+		template<class CallbackPolicy>
+		inline auto resume_background(callback_environment &ce) noexcept
+		{
+			return env_resume_background_<false, CallbackPolicy>{ce.get()};
+		}
+
+		template<class CallbackPolicy>
+		inline auto resume_background_long(callback_environment &ce) noexcept
+		{
+			return env_resume_background_<true, CallbackPolicy>{ce.get()};
 		}
 
 		inline auto resume_background(callback_environment &ce) noexcept
 		{
-			return env_resume_background_<false>{ce.get()};
+			return resume_background<callback_policy::empty>(ce);
 		}
 
 		inline auto resume_background_long(callback_environment &ce) noexcept
 		{
-			return env_resume_background_<true>{ce.get()};
+			return resume_background_long<callback_policy::empty>(ce);
 		}
+
+		// Tmers
 
 		struct timer_traits
 		{
@@ -224,10 +271,12 @@ namespace corsl
 			std::experimental::coroutine_handle<> m_resume{ nullptr };
 		};
 
+		template<class CallbackPolicy>
 		struct awaitable_base
 		{
-			static void __stdcall callback(PTP_CALLBACK_INSTANCE, void *, void * overlapped, ULONG result, ULONG_PTR, PTP_IO) noexcept
+			static void __stdcall callback(PTP_CALLBACK_INSTANCE pci, void *, void * overlapped, ULONG result, ULONG_PTR, PTP_IO) noexcept
 			{
+				CallbackPolicy::init_callback(pci);
 				auto context = static_cast<awaitable_base *>(overlapped);
 				context->m_result = result;
 				context->m_resume();
@@ -240,21 +289,22 @@ namespace corsl
 			std::experimental::coroutine_handle<> m_resume{ nullptr };
 		};
 
+		template<class CallbackPolicy = callback_policy::empty>
 		struct resumable_io
 		{
 			resumable_io(HANDLE object) :
-				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base::callback, nullptr, nullptr)))
+				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base<CallbackPolicy>::callback, nullptr, nullptr)))
 			{
 			}
 
-			template <typename F>
-			auto start(F callback)
+			template <class F>
+			auto start(F &&callback)
 			{
-				struct awaitable : awaitable_base, F
+				struct awaitable : awaitable_base<CallbackPolicy>, F
 				{
-					awaitable(PTP_IO io, F callback) noexcept :
-					m_io(io),
-						F(callback)
+					awaitable(PTP_IO io, F &&callback) noexcept :
+						m_io{ io },
+						F{ std::move(callback) }
 					{}
 
 					bool await_ready() const noexcept
@@ -289,17 +339,17 @@ namespace corsl
 					PTP_IO m_io = nullptr;
 				};
 
-				return awaitable(get(), callback);
+				return awaitable(get(), std::move(callback));
 			}
 
-			template <typename F>
-			auto start_pending(F callback)
+			template<class F>
+			auto start_pending(F &&callback)
 			{
-				struct awaitable : awaitable_base, F
+				struct awaitable : awaitable_base<CallbackPolicy>, F
 				{
-					awaitable(PTP_IO io, F callback) noexcept :
-					m_io(io),
-						F(callback)
+					awaitable(PTP_IO io, F &&callback) noexcept :
+						m_io{ io },
+						F{ std::move(callback) }
 					{}
 
 					bool await_ready() const noexcept
@@ -341,7 +391,7 @@ namespace corsl
 					PTP_IO m_io = nullptr;
 				};
 
-				return awaitable(get(), callback);
+				return awaitable(get(), std::move(callback));
 			}
 
 			PTP_IO get() const noexcept
@@ -357,12 +407,12 @@ namespace corsl
 			winrt::handle_type<io_traits> m_io;
 		};
 
-		template<class resume_policy>
-		inline void resume_on_background(resume_policy, std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
+		template<class CallbackPolicy>
+		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
 		{
 			if (!TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE pci, void * context)
 			{
-				resume_policy::init_callback(pci);
+				CallbackPolicy::init_callback(pci);
 				std::experimental::coroutine_handle<>::from_address(context)();
 			}, handle.address(), env))
 			{
@@ -370,26 +420,9 @@ namespace corsl
 			}
 		}
 
-		struct empty_resume_policy
-		{
-			static constexpr void init_callback(PTP_CALLBACK_INSTANCE) noexcept
-			{
-			}
-		};
-
-		struct advanced_resume_policy
-		{
-			inline static thread_local PTP_CALLBACK_INSTANCE current_callback{};
-
-			static void init_callback(PTP_CALLBACK_INSTANCE pci) noexcept
-			{
-				current_callback = pci;
-			}
-		};
-
 		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
 		{
-			resume_on_background(empty_resume_policy{}, handle, env);
+			resume_on_background<callback_policy::empty>(handle, env);
 		}
 
 		template<bool noexcept_ = false>
@@ -423,14 +456,78 @@ namespace corsl
 				}
 			};
 		};
+
+		class callback
+		{
+			PTP_CALLBACK_INSTANCE pci;
+
+		public:
+			callback(PTP_CALLBACK_INSTANCE pci) noexcept :
+				pci{ pci }
+			{}
+
+			void disassociate_current_thread() const noexcept
+			{
+				DisassociateCurrentThreadFromCallback(pci);
+			}
+
+			void free_library_when_callback_exits(HMODULE lib) const noexcept
+			{
+				FreeLibraryWhenCallbackReturns(pci, lib);
+			}
+
+			void leave_critical_section_when_callback_returns(PCRITICAL_SECTION ps) const noexcept
+			{
+				LeaveCriticalSectionWhenCallbackReturns(pci, ps);
+			}
+
+			void release_mutex_when_callback_returns(HANDLE mutex) const noexcept
+			{
+				ReleaseMutexWhenCallbackReturns(pci, mutex);
+			}
+
+			void release_mutex_when_callback_returns(const winrt::handle &mutex) const noexcept
+			{
+				release_mutex_when_callback_returns(mutex.get());
+			}
+
+			void release_semaphore_when_callback_returns(HANDLE semaphore, DWORD crel) const noexcept
+			{
+				ReleaseSemaphoreWhenCallbackReturns(pci, semaphore, crel);
+			}
+
+			void release_semaphore_when_callback_returns(const winrt::handle &semaphore, DWORD crel) const noexcept
+			{
+				release_semaphore_when_callback_returns(semaphore.get(), crel);
+			}
+
+			void set_event_when_callback_returns(HANDLE event) const noexcept
+			{
+				SetEventWhenCallbackReturns(pci, event);
+			}
+
+			void set_event_when_callback_returns(const winrt::handle &event) const noexcept
+			{
+				set_event_when_callback_returns(event.get());
+			}
+
+			void may_run_long() const noexcept
+			{
+				CallbackMayRunLong(pci);
+			}
+		};
 	}
+
+	using details::resume_after;
+	using details::resume_on_signal;
+
+	template<class CallbackPolicy>
+	using resumable_io_ex = details::resumable_io<CallbackPolicy>;
+
+	using resumable_io = details::resumable_io<>;
 
 	using details::resume_background;
 	using details::resume_background_long;
-	using details::resume_after;
-	using details::resume_on_signal;
-	using details::resumable_io;
-
 	using details::resume_on_background;
 
 	using fire_and_forget = details::fire_and_forget<false>;
@@ -444,8 +541,10 @@ namespace corsl
 		}
 	}
 
-	[[nodiscard]] inline PTP_CALLBACK_INSTANCE get_current_callback() noexcept
+	namespace callback_policy = details::callback_policy;
+
+	[[nodiscard]] inline details::callback get_current_callback() noexcept
 	{
-		return details::advanced_resume_policy::current_callback;
+		return { details::callback_policy::store::current_callback };
 	}
 }
