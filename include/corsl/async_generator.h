@@ -101,7 +101,7 @@ namespace corsl
 				// no resuming right now - wait until final suspend
 			}
 
-			void check_resume(std::unique_lock<srwlock> &&l) noexcept
+			void check_resume(std::unique_lock<srwlock> l) noexcept
 			{
 				if (continuation)
 				{
