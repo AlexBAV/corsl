@@ -32,6 +32,7 @@ namespace corsl
 				return value.index() != 0;
 			}
 
+			// This function leaves lock held when returns false
 			bool is_ready() const noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };
@@ -54,16 +55,14 @@ namespace corsl
 			template<class V>
 			auto yield_value(V &&value_) noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				lock.lock();
 				value = std::forward<V>(value_);
 
 				struct awaitable
 				{
-					std::unique_lock<srwlock> l;
 					promise_type *promise;
 
-					awaitable(std::unique_lock<srwlock> &&l, promise_type *promise) noexcept :
-					l{ std::move(l) },
+					awaitable(promise_type *promise) noexcept :
 						promise{ promise }
 					{
 					}
@@ -73,42 +72,44 @@ namespace corsl
 						return false;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<>)
+					void await_suspend(std::experimental::coroutine_handle<>) noexcept
 					{
-						promise->check_resume(std::move(l));
+						promise->check_resume();
 					}
 
 					void await_resume() const noexcept
 					{
 					}
 				};
-				return awaitable{ std::move(l), this };
-				//				check_resume(std::move(l));
+				return awaitable{ this };
 			}
 
 			template<class V>
 			void return_value(V &&value_) noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				std::scoped_lock l{ lock };
 				value = std::forward<V>(value_);
 				// no resuming right now - wait until final suspend
 			}
 
 			void unhandled_exception() noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				std::scoped_lock l{ lock };
 				value = std::current_exception();
 				// no resuming right now - wait until final suspend
 			}
 
-			void check_resume(std::unique_lock<srwlock> l) noexcept
+			void check_resume() noexcept
 			{
+				// lock is held when this function is invoked
 				if (continuation)
 				{
 					auto resume = std::exchange(continuation, nullptr);
-					l.unlock();
+					lock.unlock();
 					resume();
 				}
+				else
+					lock.unlock();
 			}
 
 			void check_exception()
@@ -183,6 +184,7 @@ namespace corsl
 		{
 			std::experimental::coroutine_handle<promise_type<T>> coro;
 
+			// promise's lock is held on return if and only if is_ready returns false and await_ready returns false
 			bool await_ready() const noexcept
 			{
 				return coro.done() || coro.promise().is_ready();
@@ -277,7 +279,9 @@ namespace corsl
 		public:
 			async_generator(async_generator &&o) noexcept :
 				coro{ o.coro }
-			{}
+			{
+				o.coro = {};
+			}
 
 			async_generator &operator =(async_generator &&o) noexcept
 			{
