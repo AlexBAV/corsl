@@ -9,6 +9,7 @@
 #pragma once
 
 #include "impl/dependencies.h"
+#include <boost/algorithm/string/trim_all.hpp>
 
 namespace corsl
 {
@@ -45,12 +46,14 @@ namespace corsl
 				const uint32_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					nullptr,
 					m_code,
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+					0,//MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 					reinterpret_cast<wchar_t *>(winrt::put_abi(message)),
 					0,
 					nullptr);
 
-				return { message.get(), size };
+				std::wstring error{ message.get(), size };
+				boost::trim_all(error);
+				return error;
 			}
 		};
 
