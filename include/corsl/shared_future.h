@@ -131,17 +131,27 @@ namespace corsl
 				pimpl{ std::make_shared<shared_future_impl<T>>(std::move(future)) }
 			{}
 
+			explicit operator bool() const noexcept
+			{
+				return !!pimpl;
+			}
+
 			bool is_ready() const noexcept
 			{
 				return pimpl->is_ready();
 			}
 
-			auto get()
+			decltype(auto) get()
 			{
 				return pimpl->get();
 			}
 
-			void wait() noexcept
+			decltype(auto) get() const
+			{
+				return pimpl->get();
+			}
+
+			void wait() const noexcept
 			{
 				pimpl->wait();
 			}
