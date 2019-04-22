@@ -221,6 +221,13 @@ namespace corsl
 				m_timeout(timeout)
 			{}
 
+			void cancel()
+			{
+				m_wait.close();
+				m_result = WAIT_TIMEOUT;
+				m_resume();
+			}
+
 			bool await_ready() const noexcept
 			{
 				return WaitForSingleObject(m_handle, 0) == WAIT_OBJECT_0;
