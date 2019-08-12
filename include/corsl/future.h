@@ -147,32 +147,33 @@ namespace corsl
 				return {};
 			}
 
+			struct awaiter
+			{
+				promise_type_ *pthis;
+
+				bool await_ready() const noexcept
+				{
+					pthis->lock.lock();
+					auto is_ready = !pthis->future_exists;
+					if (is_ready)
+						pthis->lock.unlock();
+					return is_ready;
+				}
+
+				void await_suspend(std::experimental::coroutine_handle<> resume_) noexcept
+				{
+					pthis->destroy_resume = resume_;
+#pragma warning(suppress: 26110)
+					pthis->lock.unlock();
+				}
+
+				static void await_resume() noexcept
+				{
+				}
+			};
+
 			auto final_suspend() noexcept
 			{
-				struct awaiter
-				{
-					promise_type_ *pthis;
-
-					bool await_ready() const noexcept
-					{
-						pthis->lock.lock();
-						auto is_ready = !pthis->future_exists;
-						if (is_ready)
-							pthis->lock.unlock();
-						return is_ready;
-					}
-
-					void await_suspend(std::experimental::coroutine_handle<> resume_) noexcept
-					{
-						pthis->destroy_resume = resume_;
-#pragma warning(suppress: 26110)
-						pthis->lock.unlock();
-					}
-
-					static void await_resume() noexcept
-					{
-					}
-				};
 				return awaiter{ this };
 			}
 
