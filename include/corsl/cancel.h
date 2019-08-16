@@ -50,7 +50,6 @@ namespace corsl
 			virtual fire_and_forget<> run() = 0;
 		};
 
-		// TODO: remove std::function when MSVC starts supporting class template parameter deduction
 		template<class F>
 		class cancellation_subscription : public cancellation_subscription_base
 		{
