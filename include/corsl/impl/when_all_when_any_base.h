@@ -9,6 +9,7 @@
 #pragma once
 
 #include "dependencies.h"
+#include <winrt/Windows.Foundation.h>
 
 namespace corsl
 {
