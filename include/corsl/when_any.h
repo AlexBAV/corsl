@@ -24,7 +24,7 @@ namespace corsl
 		template<class Result>
 		struct when_any_block
 		{
-			std::atomic<std::experimental::coroutine_handle<>> resume{};
+			std::atomic<std::coroutine_handle<>> resume{};
 
 			Result result;
 			std::exception_ptr exception;
@@ -111,7 +111,7 @@ namespace corsl
 				return false;
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle)
+			void await_suspend(std::coroutine_handle<> handle)
 			{
 				ptr->resume.store(handle, std::memory_order_relaxed);
 				std::array<std::shared_ptr<any_block_t>, N> references;
@@ -214,7 +214,7 @@ namespace corsl
 					return false;
 				}
 
-				void await_suspend(std::experimental::coroutine_handle<> handle)
+				void await_suspend(std::coroutine_handle<> handle)
 				{
 					ptr->resume.store(handle, std::memory_order_relaxed);
 					std::vector<std::shared_ptr<when_any_block_void>> references(awaitables.size(), ptr);
@@ -259,7 +259,7 @@ namespace corsl
 					return false;
 				}
 
-				void await_suspend(std::experimental::coroutine_handle<> handle)
+				void await_suspend(std::coroutine_handle<> handle)
 				{
 					ptr->resume.store(handle, std::memory_order_relaxed);
 					std::vector<std::shared_ptr<when_any_block<value_type>>> references(tasks.size(), ptr);

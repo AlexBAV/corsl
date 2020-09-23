@@ -41,14 +41,14 @@ namespace corsl
 		struct cancellation_token_transport
 		{
 			const cancellation_source &source;
-			std::experimental::coroutine_handle<promise_base0> coro;
+			std::coroutine_handle<promise_base0> coro;
 
 			bool await_ready() const noexcept
 			{
 				return true;
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<>) const noexcept
+			void await_suspend(std::coroutine_handle<>) const noexcept
 			{
 			}
 

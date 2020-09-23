@@ -61,7 +61,7 @@ namespace corsl
 			{
 			protected:
 				uint32_t m_result{};
-				std::experimental::coroutine_handle<> m_resume{ nullptr };
+				std::coroutine_handle<> m_resume{ nullptr };
 				virtual void resume() = 0;
 
 				my_awaitable_base() : OVERLAPPED{}
@@ -101,7 +101,7 @@ namespace corsl
 					return false;
 				}
 
-				auto await_suspend(std::experimental::coroutine_handle<> resume_handle)
+				auto await_suspend(std::coroutine_handle<> resume_handle)
 				{
 					m_resume = resume_handle;
 					StartThreadpoolIo(m_io);
@@ -228,7 +228,7 @@ namespace corsl
 						return false;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<> resume_handle)
+					void await_suspend(std::coroutine_handle<> resume_handle)
 					{
 						m_resume = resume_handle;
 						StartThreadpoolIo(m_io);

@@ -26,7 +26,7 @@ namespace corsl
 
 			struct awaitable
 			{
-				std::experimental::coroutine_handle<> handle;
+				std::coroutine_handle<> handle;
 				async_queue *master;
 				std::variant<std::exception_ptr, T> value;
 
@@ -49,7 +49,7 @@ namespace corsl
 					return master->is_ready(value);
 				}
 
-				bool await_suspend(std::experimental::coroutine_handle<> handle_)
+				bool await_suspend(std::coroutine_handle<> handle_)
 				{
 					handle = handle_;
 					return master->set_awaitable(this);
