@@ -41,6 +41,8 @@ namespace corsl
 				token{ token }
 			{}
 
+			~cancellation_subscription_base() = default;
+
 			cancellation_subscription_base(const cancellation_subscription_base &) = delete;
 			cancellation_subscription_base &operator =(const cancellation_subscription_base &) = delete;
 
@@ -51,7 +53,7 @@ namespace corsl
 		};
 
 		template<class F>
-		class cancellation_subscription : public cancellation_subscription_base
+		class cancellation_subscription final : public cancellation_subscription_base
 		{
 			F f;
 			bool completed{ true };
@@ -73,6 +75,8 @@ namespace corsl
 
 		public:
 			cancellation_subscription(cancellation_token &token, F &&f);
+			cancellation_subscription(const cancellation_subscription &) = delete;
+			cancellation_subscription &operator =(const cancellation_subscription &) = delete;
 
 			~cancellation_subscription()
 			{
@@ -142,7 +146,7 @@ namespace corsl
 					throw operation_cancelled{};
 			}
 
-			auto wait_cancelled()
+			auto wait_cancelled() noexcept
 			{
 				struct operation
 				{

@@ -62,9 +62,9 @@ namespace corsl
 			protected:
 				uint32_t m_result{};
 				std::coroutine_handle<> m_resume{ nullptr };
-				virtual void resume() = 0;
+				virtual void resume() noexcept = 0;
 
-				my_awaitable_base() : OVERLAPPED{}
+				my_awaitable_base() noexcept : OVERLAPPED{}
 				{}
 
 			public:
@@ -82,7 +82,7 @@ namespace corsl
 				PTP_IO m_io{ nullptr };
 				HANDLE object;
 
-				virtual void resume() override
+				virtual void resume() noexcept override
 				{
 					this->reset_timer();
 					m_resume();
