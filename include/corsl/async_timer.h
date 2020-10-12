@@ -116,7 +116,7 @@ namespace corsl
 				return awaiter{ this,duration };
 			}
 
-			void cancel()
+			void cancel() noexcept
 			{
 				bool wait = false;
 				{
