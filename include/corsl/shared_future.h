@@ -30,7 +30,7 @@ namespace corsl
 			future<T> future_;
 			srwlock lock;
 			mode mode { mode::not_started };
-			std::vector<std::experimental::coroutine_handle<>> continuations;
+			std::vector<std::coroutine_handle<>> continuations;
 
 			fire_and_forget<> start()
 			{
@@ -101,7 +101,7 @@ namespace corsl
 				}
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> resume)
+			void await_suspend(std::coroutine_handle<> resume)
 			{
 				std::unique_lock<srwlock> l{ lock, std::adopt_lock };
 				continuations.emplace_back(resume);
@@ -162,7 +162,7 @@ namespace corsl
 				return pimpl->await_ready();
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> resume) const
+			void await_suspend(std::coroutine_handle<> resume) const
 			{
 				pimpl->await_suspend(resume);
 			}

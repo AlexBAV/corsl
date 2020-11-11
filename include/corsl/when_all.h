@@ -70,7 +70,7 @@ namespace corsl
 		{
 			std::exception_ptr exception;
 			std::atomic<int> counter;
-			std::experimental::coroutine_handle<> resume;
+			std::coroutine_handle<> resume;
 			std::tuple<std::decay_t<Awaitables>...> awaitables;
 
 			when_all_awaitable_base(Awaitables &&...awaitables) noexcept :
@@ -124,7 +124,7 @@ namespace corsl
 				this->check_resume();
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
+			void await_suspend(std::coroutine_handle<> handle) noexcept
 			{
 				this->resume = handle;
 				using index_t = std::make_index_sequence<sizeof...(Awaitables)>;
@@ -187,7 +187,7 @@ namespace corsl
 				this->check_resume();
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
+			void await_suspend(std::coroutine_handle<> handle) noexcept
 			{
 				this->resume = handle;
 				using index_t = std::make_index_sequence<sizeof...(Awaitables)>;
@@ -234,7 +234,7 @@ namespace corsl
 			std::exception_ptr exception;
 			std::vector<value_type> tasks_;
 			std::atomic<int> counter;
-			std::experimental::coroutine_handle<> resume;
+			std::coroutine_handle<> resume;
 
 			range_when_all_awaitable_base(const Iterator &begin, const Iterator &end) :
 				tasks_{ begin,end },
@@ -291,7 +291,7 @@ namespace corsl
 				this->check_resume();
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
+			void await_suspend(std::coroutine_handle<> handle) noexcept
 			{
 				auto tasks{ std::move(this->tasks_) };
 				this->resume = handle;
@@ -339,7 +339,7 @@ namespace corsl
 				this->check_resume();
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
+			void await_suspend(std::coroutine_handle<> handle) noexcept
 			{
 				this->resume = handle;
 				auto tasks{ std::move(this->tasks_) };

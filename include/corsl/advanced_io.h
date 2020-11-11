@@ -61,10 +61,10 @@ namespace corsl
 			{
 			protected:
 				uint32_t m_result{};
-				std::experimental::coroutine_handle<> m_resume{ nullptr };
-				virtual void resume() = 0;
+				std::coroutine_handle<> m_resume{ nullptr };
+				virtual void resume() noexcept = 0;
 
-				my_awaitable_base() : OVERLAPPED{}
+				my_awaitable_base() noexcept : OVERLAPPED{}
 				{}
 
 			public:
@@ -82,7 +82,7 @@ namespace corsl
 				PTP_IO m_io{ nullptr };
 				HANDLE object;
 
-				virtual void resume() override
+				virtual void resume() noexcept override
 				{
 					this->reset_timer();
 					m_resume();
@@ -101,7 +101,7 @@ namespace corsl
 					return false;
 				}
 
-				auto await_suspend(std::experimental::coroutine_handle<> resume_handle)
+				auto await_suspend(std::coroutine_handle<> resume_handle)
 				{
 					m_resume = resume_handle;
 					StartThreadpoolIo(m_io);
@@ -228,7 +228,7 @@ namespace corsl
 						return false;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<> resume_handle)
+					void await_suspend(std::coroutine_handle<> resume_handle)
 					{
 						m_resume = resume_handle;
 						StartThreadpoolIo(m_io);

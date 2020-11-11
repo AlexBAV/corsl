@@ -61,14 +61,14 @@ namespace corsl
 			{
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle) const
+			void await_suspend(std::coroutine_handle<> handle) const
 			{
 				auto callback = [](PTP_CALLBACK_INSTANCE pci, void * context)
 				{
 					if constexpr (is_long)
 						CallbackMayRunLong(pci);
 					CallbackPolicy::init_callback(pci);
-					std::experimental::coroutine_handle<>::from_address(context)();
+					std::coroutine_handle<>::from_address(context)();
 				};
 
 				if (!TrySubmitThreadpoolCallback(callback, handle.address(), nullptr))
@@ -86,14 +86,14 @@ namespace corsl
 				env{ env }
 			{}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle) const
+			void await_suspend(std::coroutine_handle<> handle) const
 			{
 				auto callback = [](PTP_CALLBACK_INSTANCE pci, void * context)
 				{
 					if constexpr (is_long)
 						CallbackMayRunLong(pci);
 					CallbackPolicy::init_callback(pci);
-					std::experimental::coroutine_handle<>::from_address(context)();
+					std::coroutine_handle<>::from_address(context)();
 				};
 
 				if (!TrySubmitThreadpoolCallback(callback, handle.address(), env))
@@ -189,7 +189,7 @@ namespace corsl
 				return m_duration.count() <= 0;
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> handle)
+			void await_suspend(std::coroutine_handle<> handle)
 			{
 				m_timer.attach(check_pointer(CreateThreadpoolTimer(callback, handle.address(), nullptr)));
 				int64_t relative_count = -m_duration.count();
@@ -203,7 +203,7 @@ namespace corsl
 		private:
 			static void __stdcall callback(PTP_CALLBACK_INSTANCE, void * context, PTP_TIMER) noexcept
 			{
-				std::experimental::coroutine_handle<>::from_address(context)();
+				std::coroutine_handle<>::from_address(context)();
 			}
 
 			winrt::handle_type<timer_traits> m_timer;
@@ -233,7 +233,7 @@ namespace corsl
 				return WaitForSingleObject(m_handle, 0) == WAIT_OBJECT_0;
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> resume)
+			void await_suspend(std::coroutine_handle<> resume)
 			{
 				m_resume = resume;
 				m_wait.attach(check_pointer(CreateThreadpoolWait(callback, this, nullptr)));
@@ -275,7 +275,7 @@ namespace corsl
 			winrt::Windows::Foundation::TimeSpan m_timeout{ 0 };
 			HANDLE m_handle{};
 			uint32_t m_result{};
-			std::experimental::coroutine_handle<> m_resume{ nullptr };
+			std::coroutine_handle<> m_resume{ nullptr };
 		};
 
 		template<class CallbackPolicy>
@@ -293,7 +293,7 @@ namespace corsl
 
 			OVERLAPPED m_overlapped{};
 			uint32_t m_result{};
-			std::experimental::coroutine_handle<> m_resume{ nullptr };
+			std::coroutine_handle<> m_resume{ nullptr };
 		};
 
 		template<class CallbackPolicy = callback_policy::empty>
@@ -319,7 +319,7 @@ namespace corsl
 						return false;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<> resume_handle)
+					void await_suspend(std::coroutine_handle<> resume_handle)
 					{
 						m_resume = resume_handle;
 						StartThreadpoolIo(m_io);
@@ -364,7 +364,7 @@ namespace corsl
 						return false;
 					}
 
-					bool await_suspend(std::experimental::coroutine_handle<> resume_handle)
+					bool await_suspend(std::coroutine_handle<> resume_handle)
 					{
 						m_resume = resume_handle;
 						StartThreadpoolIo(m_io);
@@ -415,19 +415,19 @@ namespace corsl
 		};
 
 		template<class CallbackPolicy>
-		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
+		inline void resume_on_background(std::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
 		{
 			if (!TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE pci, void * context)
 			{
 				CallbackPolicy::init_callback(pci);
-				std::experimental::coroutine_handle<>::from_address(context)();
+				std::coroutine_handle<>::from_address(context)();
 			}, handle.address(), env))
 			{
 				throw_last_error();
 			}
 		}
 
-		inline void resume_on_background(std::experimental::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
+		inline void resume_on_background(std::coroutine_handle<> handle, PTP_CALLBACK_ENVIRON env = nullptr)
 		{
 			resume_on_background<callback_policy::empty>(handle, env);
 		}
@@ -452,12 +452,12 @@ namespace corsl
 						std::terminate();
 				}
 
-				std::experimental::suspend_never initial_suspend() const noexcept
+				std::suspend_never initial_suspend() const noexcept
 				{
 					return{};
 				}
 
-				std::experimental::suspend_never final_suspend() const noexcept
+				std::suspend_never final_suspend() const noexcept
 				{
 					return{};
 				}

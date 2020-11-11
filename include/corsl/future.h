@@ -27,7 +27,7 @@ namespace corsl
 		{
 			srwlock lock;
 			std::variant<std::monostate, std::exception_ptr, value_type> value;
-			std::experimental::coroutine_handle<> resume{};
+			std::coroutine_handle<> resume{};
 			std::atomic<int> use_count{ 0 };
 
 			bool is_ready(std::unique_lock<srwlock> &) const noexcept
@@ -129,11 +129,11 @@ namespace corsl
 		template<class T>
 		struct  __declspec(empty_bases) promise_type_ : promise_base<T>
 		{
-			std::experimental::coroutine_handle<> destroy_resume{};
+			std::coroutine_handle<> destroy_resume{};
 			bool future_exists{ true };
 
 			//
-			bool start_async(std::experimental::coroutine_handle<> resume_, std::unique_lock<srwlock> &&l) noexcept
+			bool start_async(std::coroutine_handle<> resume_, std::unique_lock<srwlock> &&l) noexcept
 			{
 				if (this->is_ready(l))
 					return false;	// we already have a result
@@ -142,7 +142,7 @@ namespace corsl
 				return true;
 			}
 
-			static std::experimental::suspend_never initial_suspend() noexcept
+			static std::suspend_never initial_suspend() noexcept
 			{
 				return {};
 			}
@@ -160,7 +160,7 @@ namespace corsl
 					return is_ready;
 				}
 
-				void await_suspend(std::experimental::coroutine_handle<> resume_) noexcept
+				void await_suspend(std::coroutine_handle<> resume_) noexcept
 				{
 					pthis->destroy_resume = resume_;
 #pragma warning(suppress: 26110)
@@ -180,7 +180,7 @@ namespace corsl
 			future<T> get_return_object() noexcept
 			{
 				add_ref();
-				return { std::experimental::coroutine_handle<promise_type_>::from_promise(*this) };
+				return { std::coroutine_handle<promise_type_>::from_promise(*this) };
 			}
 
 			void add_ref() noexcept
@@ -216,12 +216,12 @@ namespace corsl
 
 			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_source &source) noexcept
 			{
-				return { source, std::experimental::coroutine_handle<promise_base0>::from_promise(*this) };
+				return { source, std::coroutine_handle<promise_base0>::from_promise(*this) };
 			}
 
 			corsl::details::cancellation_token_transport await_transform(const corsl::details::cancellation_source &source) noexcept
 			{
-				return { source, std::experimental::coroutine_handle<promise_base0>::from_promise(*this) };
+				return { source, std::coroutine_handle<promise_base0>::from_promise(*this) };
 			}
 		};
 
@@ -232,7 +232,7 @@ namespace corsl
 			static_assert(!std::is_reference_v<T>, "future<T> is not allowed for reference types");
 
 			using promise_type_ = promise_type_<T>;
-			using coro_type = std::experimental::coroutine_handle<promise_type_>;
+			using coro_type = std::coroutine_handle<promise_type_>;
 			coro_type coro;
 
 			future(coro_type coro) noexcept :
@@ -252,7 +252,7 @@ namespace corsl
 					return ready;
 				}
 
-				bool await_suspend(std::experimental::coroutine_handle<> resume) noexcept
+				bool await_suspend(std::coroutine_handle<> resume) noexcept
 				{
 					std::unique_lock<srwlock> l{ coro.promise().lock, std::adopt_lock };
 					return coro.promise().start_async(resume, std::move(l));
@@ -353,7 +353,7 @@ namespace corsl
 				return ready;
 			}
 
-			bool await_suspend(std::experimental::coroutine_handle<> resume) noexcept
+			bool await_suspend(std::coroutine_handle<> resume) noexcept
 			{
 				std::unique_lock<srwlock> l{ coro.promise().lock, std::adopt_lock };
 				return coro.promise().start_async(resume, std::move(l));

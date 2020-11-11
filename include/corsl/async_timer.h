@@ -28,14 +28,14 @@ namespace corsl
 			};
 
 			srwlock lock;
-			std::experimental::coroutine_handle<> resume_location{};
+			std::coroutine_handle<> resume_location{};
 			bool cancellation_requested{ false };
 
 			//
 			void resume(bool background) noexcept
 			{
 				std::unique_lock l{ lock };
-				auto continuation = std::exchange(resume_location, std::experimental::coroutine_handle<>{});
+				auto continuation = std::exchange(resume_location, std::coroutine_handle<>{});
 				if (continuation)
 				{
 					l.unlock();
@@ -69,7 +69,7 @@ namespace corsl
 					lock.unlock();
 			}
 
-			void suspend(std::experimental::coroutine_handle<> handle, winrt::Windows::Foundation::TimeSpan duration)
+			void suspend(std::coroutine_handle<> handle, winrt::Windows::Foundation::TimeSpan duration)
 			{
 				{
 					std::unique_lock l{ lock };
@@ -100,7 +100,7 @@ namespace corsl
 						return duration.count() <= 0;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<> handle) noexcept
+					void await_suspend(std::coroutine_handle<> handle) noexcept
 					{
 						timer->suspend(handle, duration);
 					}
@@ -116,7 +116,7 @@ namespace corsl
 				return awaiter{ this,duration };
 			}
 
-			void cancel()
+			void cancel() noexcept
 			{
 				bool wait = false;
 				{

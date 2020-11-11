@@ -25,7 +25,7 @@ namespace corsl
 			mutable srwlock lock;
 			using variant_t = std::variant<std::monostate, T, std::exception_ptr>;
 			variant_t value;
-			std::experimental::coroutine_handle<> continuation;
+			std::coroutine_handle<> continuation;
 
 			bool is_ready_impl() const noexcept
 			{
@@ -45,7 +45,7 @@ namespace corsl
 				}
 			}
 
-			void suspend(std::experimental::coroutine_handle<> continuation_)
+			void suspend(std::coroutine_handle<> continuation_)
 			{
 				std::unique_lock<srwlock> l{ lock, std::adopt_lock };
 				assert(!continuation && "continuation must be empty at this time");
@@ -72,7 +72,7 @@ namespace corsl
 						return false;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<>) noexcept
+					void await_suspend(std::coroutine_handle<>) noexcept
 					{
 						promise->check_resume();
 					}
@@ -123,7 +123,7 @@ namespace corsl
 				return std::get<T>(std::exchange(value, variant_t{}));
 			}
 
-			static std::experimental::suspend_always initial_suspend() noexcept
+			static std::suspend_always initial_suspend() noexcept
 			{
 				return {};
 			}
@@ -142,7 +142,7 @@ namespace corsl
 							return true;
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<>) noexcept
+					void await_suspend(std::coroutine_handle<>) noexcept
 					{
 						promise->continuation();
 					}
@@ -167,12 +167,12 @@ namespace corsl
 
 			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_source &source) noexcept
 			{
-				return { source, std::experimental::coroutine_handle<promise_base0>::from_promise(*this) };
+				return { source, std::coroutine_handle<promise_base0>::from_promise(*this) };
 			}
 
 			corsl::details::cancellation_token_transport await_transform(const corsl::details::cancellation_source &source) noexcept
 			{
-				return { source, std::experimental::coroutine_handle<promise_base0>::from_promise(*this) };
+				return { source, std::coroutine_handle<promise_base0>::from_promise(*this) };
 			}
 		};
 
@@ -182,7 +182,7 @@ namespace corsl
 		template<class T>
 		struct awaitable
 		{
-			std::experimental::coroutine_handle<promise_type<T>> coro;
+			std::coroutine_handle<promise_type<T>> coro;
 
 			// promise's lock is held on return if and only if is_ready returns false and await_ready returns false
 			bool await_ready() const noexcept
@@ -190,7 +190,7 @@ namespace corsl
 				return coro.done() || coro.promise().is_ready();
 			}
 
-			void await_suspend(std::experimental::coroutine_handle<> continuation) noexcept
+			void await_suspend(std::coroutine_handle<> continuation) noexcept
 			{
 				coro.promise().suspend(continuation);
 			}
@@ -206,9 +206,9 @@ namespace corsl
 			friend class async_generator<T>;
 			friend struct awaitable<T>;
 
-			std::experimental::coroutine_handle<promise_type<T>> coro;
+			std::coroutine_handle<promise_type<T>> coro;
 
-			iterator(std::experimental::coroutine_handle<promise_type<T>> coro) noexcept :
+			iterator(std::coroutine_handle<promise_type<T>> coro) noexcept :
 			coro{ coro }
 			{}
 
@@ -267,9 +267,9 @@ namespace corsl
 		private:
 			using iterator = iterator<T>;
 			using awaitable = awaitable<T>;
-			std::experimental::coroutine_handle<promise_type> coro{ nullptr };
+			std::coroutine_handle<promise_type> coro{ nullptr };
 
-			async_generator(std::experimental::coroutine_handle<promise_type> coro) noexcept :
+			async_generator(std::coroutine_handle<promise_type> coro) noexcept :
 				coro{ coro }
 			{}
 
@@ -312,7 +312,7 @@ namespace corsl
 		template<class T>
 		inline async_generator<T> promise_type<T>::get_return_object() noexcept
 		{
-			return { std::experimental::coroutine_handle<promise_type>::from_promise(*this) };
+			return { std::coroutine_handle<promise_type>::from_promise(*this) };
 		}
 
 	}

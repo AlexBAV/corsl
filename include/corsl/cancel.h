@@ -41,6 +41,8 @@ namespace corsl
 				token{ token }
 			{}
 
+			~cancellation_subscription_base() = default;
+
 			cancellation_subscription_base(const cancellation_subscription_base &) = delete;
 			cancellation_subscription_base &operator =(const cancellation_subscription_base &) = delete;
 
@@ -51,7 +53,7 @@ namespace corsl
 		};
 
 		template<class F>
-		class cancellation_subscription : public cancellation_subscription_base
+		class cancellation_subscription final : public cancellation_subscription_base
 		{
 			F f;
 			bool completed{ true };
@@ -73,6 +75,8 @@ namespace corsl
 
 		public:
 			cancellation_subscription(cancellation_token &token, F &&f);
+			cancellation_subscription(const cancellation_subscription &) = delete;
+			cancellation_subscription &operator =(const cancellation_subscription &) = delete;
 
 			~cancellation_subscription()
 			{
@@ -88,7 +92,7 @@ namespace corsl
 			friend class cancellation_subscription_base;
 
 			std::shared_ptr<cancellation_source_body> body;
-			std::experimental::coroutine_handle<promise_base0> coro{};	// associated promise
+			std::coroutine_handle<promise_base0> coro{};	// associated promise
 
 			srwlock lock;
 			bi::list<cancellation_subscription_base, bi::constant_time_size<false>> callbacks;
@@ -142,12 +146,12 @@ namespace corsl
 					throw operation_cancelled{};
 			}
 
-			auto wait_cancelled()
+			auto wait_cancelled() noexcept
 			{
 				struct operation
 				{
 					cancellation_token &token;
-					std::experimental::coroutine_handle<> resume;
+					std::coroutine_handle<> resume;
 					std::optional < cancellation_subscription<std::function<void()>>> subscription;
 
 					operation(cancellation_token &token) noexcept :
@@ -159,7 +163,7 @@ namespace corsl
 						return token.is_cancelled();
 					}
 
-					void await_suspend(std::experimental::coroutine_handle<> resume_handle) noexcept
+					void await_suspend(std::coroutine_handle<> resume_handle) noexcept
 					{
 						resume = resume_handle;
 						subscription.emplace(token, [this]
