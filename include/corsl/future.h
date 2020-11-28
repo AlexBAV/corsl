@@ -302,7 +302,7 @@ namespace corsl
 			{
 				assert(coro && "Calling get() or wait() on uninitialized future is prohibited");
 				{
-					std::unique_lock<srwlock> l{ coro.promise().lock };
+					std::unique_lock l{ coro.promise().lock };
 					if (coro.promise().is_ready(l))
 						return;
 				}
@@ -311,15 +311,15 @@ namespace corsl
 				condition_variable cv;
 				bool completed = false;
 
-				[&]()->fire_and_forget<>
+				[&]() noexcept -> fire_and_forget<>
 				{
 					co_await special_await{ coro };
-					const std::lock_guard<srwlock> guard{ x };
+					const std::lock_guard guard{ x };
 					completed = true;
 					cv.wake_one();
 				}();
 
-				const std::lock_guard<srwlock> guard{ x };
+				const std::lock_guard guard{ x };
 				cv.wait_while(x, [&] { return !completed; });
 			}
 
