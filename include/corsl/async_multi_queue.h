@@ -11,74 +11,41 @@
 #include <queue>
 #include <variant>
 
-#include "impl/dependencies.h"
-#include "compatible_base.h"
-#include "srwlock.h"
+#include <boost/intrusive/list.hpp>
+
+#include "async_queue.h"
+#include "thread_pool.h"
 
 namespace corsl
 {
 	namespace details
 	{
-		struct awaitable_empty_base {};
+		namespace bi = boost::intrusive;
 
-		template<class Master, class T, class Base = awaitable_empty_base>
-		struct aq_awaitable : public Base
-		{
-			std::coroutine_handle<> handle;
-			Master *master;
-			std::variant<std::exception_ptr, T> value;
-
-			aq_awaitable(Master *master) noexcept :
-				master{ master }
-			{}
-
-			// no move and copy
-			aq_awaitable(const aq_awaitable &) = delete;
-			aq_awaitable &operator =(const aq_awaitable &) = delete;
-
-			void set_result(T &&value_) noexcept
-			{
-				value = std::move(value_);
-			}
-
-			void set_exception(std::exception_ptr ptr) noexcept
-			{
-				value = std::move(ptr);
-			}
-
-			bool await_ready() noexcept
-			{
-				return master->is_ready(value);
-			}
-
-			bool await_suspend(std::coroutine_handle<> handle_)
-			{
-				handle = handle_;
-				return master->set_awaitable(this);
-			}
-
-			T await_resume()
-			{
-				if (value.index() == 0)
-					std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
-				else
-					return std::get<T>(std::move(value));
-			}
-		};
+#if defined(_DEBUG)
+#define BL_LINK_MODE bi::link_mode<bi::safe_link>
+#else
+#define BL_LINK_MODE bi::link_mode<bi::normal_link>
+#endif
 
 		template<class T, class Queue = std::queue<T>, class CallbackPolicy = callback_policy::empty>
-		class async_queue
+		class async_multi_consumer_queue
 		{
 			using queue_t = Queue;
-			using awaitable = aq_awaitable<async_queue, T>;
+			struct awaitable_base : public boost::intrusive::list_base_hook<BL_LINK_MODE>
+			{
+			};
+
+			using awaitable = aq_awaitable<async_multi_consumer_queue, T, awaitable_base>;
 			friend typename awaitable;
 
 			mutable srwlock queue_lock;
 			queue_t queue;
-			awaitable *current{ nullptr };
+			bi::list<awaitable, bi::constant_time_size<true>> clients;
 			std::exception_ptr exception{};
+			PTP_CALLBACK_ENVIRON pce;
 
-			bool is_ready(std::variant<std::exception_ptr, T> &value) noexcept
+			bool is_ready(std::variant<std::exception_ptr, T> &value)
 			{
 				std::unique_lock l{ queue_lock };
 				if (exception)
@@ -106,16 +73,19 @@ namespace corsl
 					queue.pop();
 					return false;
 				}
-				current = pointer;
+				clients.push_back(*pointer);
 				return true;
 			}
 
-			void drain([[maybe_unused]] std::unique_lock<srwlock> &&lock)
+			bool drain([[maybe_unused]] std::unique_lock<srwlock> &&lock)
 			{
 				lock;
-				if (current)
+				if (!clients.empty())
 				{
-					auto cur = std::exchange(current, nullptr);
+					auto it = clients.begin();
+					auto *cur = std::addressof(*it);
+					clients.erase(it);
+
 					if (exception)
 						cur->set_exception(exception);
 					else
@@ -125,10 +95,25 @@ namespace corsl
 						queue.pop();
 					}
 					resume_on_background<CallbackPolicy>(cur->handle);
+					return true;
 				}
+				else
+					return false;
 			}
 
 		public:
+			async_multi_consumer_queue(PTP_CALLBACK_ENVIRON pce = nullptr) noexcept :
+				pce{ pce }
+			{}
+
+			async_multi_consumer_queue(callback_environment &ce) noexcept :
+				pce{ ce.get() }
+			{}
+
+			async_multi_consumer_queue(const async_multi_consumer_queue &) = delete;
+			async_multi_consumer_queue &operator =(const async_multi_consumer_queue &) = delete;
+
+			//
 			template<class V>
 			void push(V &&item)
 			{
@@ -166,8 +151,12 @@ namespace corsl
 			void clear() noexcept
 			{
 				queue_t empty_queue;
-				std::scoped_lock<srwlock> l{ queue_lock };
+				std::unique_lock l{ queue_lock };
 				queue.swap(empty_queue);
+				exception = std::make_exception_ptr(operation_cancelled{});
+
+				while (drain(std::move(l)))
+					;
 				exception = {};
 			}
 
@@ -178,7 +167,9 @@ namespace corsl
 				return queue.empty();
 			}
 		};
+
+#undef BL_LINK_MODE
 	}
 
-	using details::async_queue;
+	using details::async_multi_consumer_queue;
 }
