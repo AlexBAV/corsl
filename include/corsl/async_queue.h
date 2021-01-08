@@ -129,13 +129,26 @@ namespace corsl
 			}
 
 		public:
+			async_queue(const async_queue &) = delete;
+			async_queue &operator =(const async_queue &) = delete;
+
+			async_queue() = default;
+
+			template<class Alloc>
+				requires std::uses_allocator_v<Queue, Alloc>
+			explicit async_queue(const Alloc &alloc) :
+				queue{ alloc }
+			{}
+
 			template<class V>
-			void push(V &&item)
+			size_t push(V &&item)
 			{
 				std::unique_lock l{ queue_lock };
 				if (!exception)
 					queue.emplace(std::forward<V>(item));
+				auto retval = queue.size();
 				drain(std::move(l));
+				return retval;
 			}
 
 			template<class...Args>
@@ -174,8 +187,15 @@ namespace corsl
 			[[nodiscard]]
 			bool empty() const noexcept
 			{
-				std::scoped_lock<srwlock> l{ queue_lock };
+				std::shared_lock l{ queue_lock };
 				return queue.empty();
+			}
+
+			[[nodiscard]]
+			auto size() const noexcept
+			{
+				std::shared_lock l{ queue_lock };
+				return queue.size();
 			}
 		};
 	}

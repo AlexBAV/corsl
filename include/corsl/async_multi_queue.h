@@ -43,7 +43,7 @@ namespace corsl
 			queue_t queue;
 			bi::list<awaitable, bi::constant_time_size<true>> clients;
 			std::exception_ptr exception{};
-			PTP_CALLBACK_ENVIRON pce;
+			PTP_CALLBACK_ENVIRON pce{};
 
 			bool is_ready(std::variant<std::exception_ptr, T> &value)
 			{
@@ -110,6 +110,26 @@ namespace corsl
 				pce{ ce.get() }
 			{}
 
+			template<class Alloc>
+			requires std::uses_allocator_v<Queue, Alloc>
+			explicit async_multi_consumer_queue(PTP_CALLBACK_ENVIRON pce, const Alloc &alloc) :
+				pce{ pce },
+				queue{ alloc }
+			{}
+
+			template<class Alloc>
+			requires std::uses_allocator_v<Queue, Alloc>
+			explicit async_multi_consumer_queue(callback_environment &ce, const Alloc &alloc) :
+				pce{ ce.get() },
+				queue{ alloc }
+			{}
+
+			template<class Alloc>
+			requires std::uses_allocator_v<Queue, Alloc>
+			explicit async_multi_consumer_queue(const Alloc &alloc) :
+				queue{ alloc }
+			{}
+
 			async_multi_consumer_queue(const async_multi_consumer_queue &) = delete;
 			async_multi_consumer_queue &operator =(const async_multi_consumer_queue &) = delete;
 
@@ -165,6 +185,13 @@ namespace corsl
 			{
 				std::scoped_lock<srwlock> l{ queue_lock };
 				return queue.empty();
+			}
+
+			[[nodiscard]]
+			auto size() const noexcept
+			{
+				std::shared_lock l{ queue_lock };
+				return queue.size();
 			}
 		};
 
