@@ -10,6 +10,7 @@
 
 #include <queue>
 #include <variant>
+#include <shared_mutex>
 
 #include "impl/dependencies.h"
 #include "compatible_base.h"
