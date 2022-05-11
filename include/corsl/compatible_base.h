@@ -321,12 +321,12 @@ namespace corsl
 
 					void await_suspend(std::coroutine_handle<> resume_handle)
 					{
-						m_resume = resume_handle;
+						this->m_resume = resume_handle;
 						StartThreadpoolIo(m_io);
 
 						try
 						{
-							(*this)(m_overlapped);
+							(*this)(this->m_overlapped);
 						}
 						catch (...)
 						{
@@ -337,10 +337,10 @@ namespace corsl
 
 					uint32_t await_resume() const
 					{
-						if (m_result != ERROR_HANDLE_EOF)
-							check_win32(m_result);
+						if (this->m_result != ERROR_HANDLE_EOF)
+							check_win32(this->m_result);
 
-						return static_cast<uint32_t>(m_overlapped.InternalHigh);
+						return static_cast<uint32_t>(this->m_overlapped.InternalHigh);
 					}
 
 					PTP_IO m_io = nullptr;
@@ -366,12 +366,12 @@ namespace corsl
 
 					bool await_suspend(std::coroutine_handle<> resume_handle)
 					{
-						m_resume = resume_handle;
+						this->m_resume = resume_handle;
 						StartThreadpoolIo(m_io);
 
 						try
 						{
-							const bool pending = (*this)(m_overlapped);
+							const bool pending = (*this)(this->m_overlapped);
 
 							if (!pending)
 							{
@@ -389,10 +389,10 @@ namespace corsl
 
 					uint32_t await_resume() const
 					{
-						if (m_result != ERROR_HANDLE_EOF)
-							check_win32(m_result);
+						if (this->m_result != ERROR_HANDLE_EOF)
+							check_win32(this->m_result);
 
-						return static_cast<uint32_t>(m_overlapped.InternalHigh);
+						return static_cast<uint32_t>(this->m_overlapped.InternalHigh);
 					}
 
 					PTP_IO m_io = nullptr;

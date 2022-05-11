@@ -209,7 +209,7 @@ namespace corsl
 					void oncancel()
 					{
 						if (!completion.test_and_set())
-							::CancelIoEx(h, &m_overlapped);
+							::CancelIoEx(h, &this->m_overlapped);
 					}
 
 				public:
@@ -230,12 +230,12 @@ namespace corsl
 
 					void await_suspend(std::coroutine_handle<> resume_handle)
 					{
-						m_resume = resume_handle;
+						this->m_resume = resume_handle;
 						StartThreadpoolIo(m_io);
 
 						try
 						{
-							(*this)(m_overlapped);
+							(*this)(this->m_overlapped);
 						}
 						catch (...)
 						{
@@ -247,10 +247,10 @@ namespace corsl
 					uint32_t await_resume() const
 					{
 						completion.test_and_set();
-						if (m_result != ERROR_HANDLE_EOF)
-							check_win32(m_result);
+						if (this->m_result != ERROR_HANDLE_EOF)
+							check_win32(this->m_result);
 
-						return static_cast<uint32_t>(m_overlapped.InternalHigh);
+						return static_cast<uint32_t>(this->m_overlapped.InternalHigh);
 					}
 				};
 
