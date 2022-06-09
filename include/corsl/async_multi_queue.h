@@ -22,17 +22,11 @@ namespace corsl
 	{
 		namespace bi = boost::intrusive;
 
-#if defined(_DEBUG)
-#define BL_LINK_MODE bi::link_mode<bi::safe_link>
-#else
-#define BL_LINK_MODE bi::link_mode<bi::normal_link>
-#endif
-
 		template<class T, class Queue = std::queue<T>, class CallbackPolicy = callback_policy::empty>
 		class async_multi_consumer_queue
 		{
 			using queue_t = Queue;
-			struct awaitable_base : public boost::intrusive::list_base_hook<BL_LINK_MODE>
+			struct awaitable_base : public boost::intrusive::list_base_hook<bi::link_mode<bi::normal_link>>
 			{
 			};
 
@@ -151,9 +145,21 @@ namespace corsl
 
 			void cancel()
 			{
-				std::unique_lock l{ queue_lock };
-				exception = std::make_exception_ptr(operation_cancelled{});
-				drain(std::move(l));
+				decltype(clients) clients_copy;
+
+				{
+					std::unique_lock l{ queue_lock };
+					exception = std::make_exception_ptr(operation_cancelled{});
+					std::swap(clients, clients_copy);
+				}
+
+				auto b = clients_copy.begin();
+				const auto e = clients_copy.end();
+				for (decltype(b) next; b != e; b = next)
+				{
+					next = std::next(b);
+					resume_on_background<CallbackPolicy>(b->handle);
+				}
 			}
 
 			void push_exception(std::exception_ptr exception_)
@@ -194,8 +200,6 @@ namespace corsl
 				return queue.size();
 			}
 		};
-
-#undef BL_LINK_MODE
 	}
 
 	using details::async_multi_consumer_queue;
