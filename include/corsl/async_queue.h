@@ -153,9 +153,14 @@ namespace corsl
 			}
 
 			template<class...Args>
-			void emplace(Args &&...args)
+			size_t emplace(Args &&...args)
 			{
-				push(T(std::forward<Args>(args)...));
+				std::unique_lock l{ queue_lock };
+				if (!exception)
+					queue.emplace(std::forward<Args>(args)...);
+				auto retval = queue.size();
+				drain(std::move(l));
+				return retval;
 			}
 
 			void cancel()
