@@ -68,7 +68,7 @@ namespace corsl
 		{
 			try
 			{
-				if constexpr (std::is_same_v<result_type<void>, decltype(get_result_type(task))>)
+				if constexpr (std::same_as<result_type<void>, decltype(get_result_type(task))>)
 				{
 					co_await task;
 					master->finished(index);
@@ -95,7 +95,7 @@ namespace corsl
 		{
 			using any_block_t = when_any_block<Result>;
 			static constexpr size_t N = sizeof...(Awaitables);
-			static constexpr bool is_void = std::is_same_v<Result, result_type<void>>;
+			static constexpr bool is_void = std::same_as<Result, result_type<void>>;
 
 			std::shared_ptr<any_block_t> ptr{ std::make_shared<any_block_t>() };
 			std::tuple<std::decay_t<Awaitables>...> awaitables;
@@ -122,14 +122,12 @@ namespace corsl
 				when_any_helper(std::move(references), std::move(awaitables_copy), index_t{});
 			}
 
-			template<bool cond = is_void>
-			std::enable_if_t<cond, size_t> iresume() const
+			size_t iresume() const requires is_void
 			{
 				return ptr->index;
 			}
 
-			template<bool cond = is_void>
-			std::enable_if_t<!cond, std::pair<size_t, Result>> iresume() const
+			std::pair<size_t, Result> iresume() const requires !is_void
 			{
 				return { ptr->index, std::move(ptr->result) };
 			}
@@ -139,7 +137,7 @@ namespace corsl
 				if (ptr->exception)
 					std::rethrow_exception(ptr->exception);
 				else
-					return iresume<>();
+					return iresume();
 			}
 		};
 
@@ -159,7 +157,7 @@ namespace corsl
 
 			if constexpr (mp_apply<mp_same, result_types>{})
 			{
-				if constexpr(std::is_same_v<void, invoke_result<mp_first<result_types>>>)
+				if constexpr(std::same_as<void, invoke_result<mp_first<result_types>>>)
 					return when_any_impl<mp_first<result_types>>(std::forward<Awaitables>(awaitables)...);
 				else
 					return when_any_impl<invoke_result<mp_first<result_types>>>(std::forward<Awaitables>(awaitables)...);
@@ -170,7 +168,7 @@ namespace corsl
 					invoke_result,
 					mp_unique<mp_remove<result_types, result_type<void>>>
 				>;
-				using value_type = std::conditional_t<mp_size<filtered_types>::value == 1, mp_first<filtered_types>, std::variant<filtered_types>>;
+				using value_type = std::conditional_t<mp_size<filtered_types>::value == 1, mp_first<filtered_types>, mp_apply<std::variant, filtered_types>>;
 				return when_any_impl<value_type>(std::forward<Awaitables>(awaitables)...);
 			}
 		}
@@ -193,25 +191,25 @@ namespace corsl
 			}
 		}
 
-		template<class Iterator>
-		inline auto range_when_any_impl(result_type<void>, const Iterator &begin, const Iterator &end)
+		template<sr::range Range>
+		inline auto range_when_any_impl(result_type<void>, Range &&range)
 		{
 			struct when_any_awaitable
 			{
-				using value_type = std::decay_t<typename std::iterator_traits<Iterator>::value_type>;
+				using value_type = std::decay_t<sr::range_value_t<Range>>;
 
 				std::shared_ptr<when_any_block_void> ptr;
 				std::vector<value_type> awaitables;
 
-				when_any_awaitable(const Iterator &begin, const Iterator &end) :
-					awaitables{ begin, end },
+				when_any_awaitable(Range &&range) :
+					awaitables{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
 					ptr{ std::make_shared<when_any_block_void>() }
 				{
 				}
 
 				bool await_ready() const noexcept
 				{
-					return false;
+					return awaitables.empty();
 				}
 
 				void await_suspend(std::coroutine_handle<> handle)
@@ -235,28 +233,28 @@ namespace corsl
 				}
 			};
 
-			return when_any_awaitable{ begin, end };
+			return when_any_awaitable{ std::move(range) };
 		}
 
 		//non-void case
-		template<class T, class Iterator>
-		inline auto range_when_any_impl(result_type<T>, const Iterator &begin, const Iterator &end)
+		template<class T, sr::range Range>
+		inline auto range_when_any_impl(result_type<T>, Range &&range)
 		{
-			using task_type = typename std::iterator_traits<Iterator>::value_type;
+			using task_type = sr::range_value_t<Range>;
 			using value_type = std::decay_t<T>;
 			struct when_any_awaitable
 			{
 				std::shared_ptr<when_any_block<value_type>> ptr;
 				std::vector<task_type> tasks;
 
-				when_any_awaitable(const Iterator &begin, const Iterator &end) noexcept :
-				tasks{ begin, end },
+				when_any_awaitable(Range &&range) noexcept :
+					tasks{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
 					ptr{ std::make_shared<when_any_block<value_type>>() }
 				{}
 
 				bool await_ready() const noexcept
 				{
-					return false;
+					return tasks.empty();
 				}
 
 				void await_suspend(std::coroutine_handle<> handle)
@@ -278,15 +276,15 @@ namespace corsl
 				}
 			};
 
-			return when_any_awaitable{ begin, end };
+			return when_any_awaitable{ std::move(range) };
 		}
 
 		//
-
-		template<class Iterator>
-		inline auto when_any_range(const Iterator &begin, const Iterator &end)
+		template<sr::range Range>
+		inline auto when_any_range(Range &&range)
 		{
-			return range_when_any_impl(get_result_type(*begin), begin, end);
+			constexpr auto type = get_result_type(*sr::begin(range));
+			return range_when_any_impl(type, std::move(range));
 		}
 	}
 

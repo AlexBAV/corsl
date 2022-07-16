@@ -14,49 +14,31 @@ namespace corsl
 {
 	namespace details
 	{
+		namespace sr = std::ranges;
+		namespace rv = std::views;
 		// when_all
 
 		// 1. Variadic case
 		// Awaitables are passed as direct arguments to when_all
 		template<size_t Index, class Master, class Awaitable>
-		inline auto when_all_helper_single(Master &master, Awaitable task) noexcept ->
-			std::enable_if_t<
-			std::is_same_v<
-			result_type<void>,
-			decltype(get_result_type(task))
-			>,
-			fire_and_forget<>
-			>
+		inline fire_and_forget<> when_all_helper_single(Master &master, Awaitable task) noexcept
 		{
 			try
 			{
-				co_await task;
-				master.finished(std::integral_constant<size_t, Index>{});
+				if constexpr (std::same_as<result_type<void>, decltype(get_result_type(task))>)
+				{
+					co_await task;
+					master.finished(std::integral_constant<size_t, Index>{});
+				}
+				else
+				{
+					master.finished(std::integral_constant<size_t, Index>{}, co_await task);
+				}
 			}
 			catch (...)
 			{
 				master.finished_exception();
 			}
-		}
-
-		template<size_t Index, class Master, class Awaitable>
-		inline auto when_all_helper_single(Master &master, Awaitable task) noexcept ->
-			std::enable_if_t<
-			!std::is_same_v<
-			result_type<void>,
-			decltype(get_result_type(task))
-			>,
-			fire_and_forget<>
-			>
-		{
-			try
-			{
-				master.finished(std::integral_constant<size_t, Index>{}, co_await task);
-			}
-			catch (...)
-			{
-				master.finished_exception();
-			};
 		}
 
 		template<class Master, class Tuple, size_t...I>
@@ -74,7 +56,7 @@ namespace corsl
 			std::tuple<std::decay_t<Awaitables>...> awaitables;
 
 			when_all_awaitable_base(Awaitables &&...awaitables) noexcept :
-			awaitables{ std::forward<Awaitables>(awaitables)... },
+				awaitables{ std::forward<Awaitables>(awaitables)... },
 				counter{ sizeof...(awaitables) }
 			{}
 
@@ -127,22 +109,15 @@ namespace corsl
 			void await_suspend(std::coroutine_handle<> handle) noexcept
 			{
 				this->resume = handle;
-				using index_t = std::make_index_sequence<sizeof...(Awaitables)>;
-				when_all_helper(*this, std::move(this->awaitables), index_t{});
+				when_all_helper(*this, std::move(this->awaitables), std::make_index_sequence<sizeof...(Awaitables)>{});
 			}
 
 			void await_resume() const
 			{
 				if (this->exception)
-					std::rethrow_exception(this->exception);
+					std::rethrow_exception(std::move(this->exception));
 			}
 		};
-
-		template<class...Awaitables>
-		inline auto when_all_impl(std::true_type, Awaitables &&...awaitables)
-		{
-			return when_all_awaitable_void<Awaitables...> { std::forward<Awaitables>(awaitables)... };
-		}
 
 		// non-void case
 		template<class...Awaitables>
@@ -190,24 +165,17 @@ namespace corsl
 			void await_suspend(std::coroutine_handle<> handle) noexcept
 			{
 				this->resume = handle;
-				using index_t = std::make_index_sequence<sizeof...(Awaitables)>;
-				when_all_helper(*this, this->awaitables, index_t{});
+				when_all_helper(*this, this->awaitables, std::make_index_sequence<sizeof...(Awaitables)>{});
 			}
 
 			results_t await_resume()
 			{
 				if (this->exception)
-					std::rethrow_exception(this->exception);
+					std::rethrow_exception(std::move(this->exception));
 				else
 					return std::move(results);
 			}
 		};
-
-		template<class...Awaitables>
-		inline auto when_all_impl(std::false_type, Awaitables &&...awaitables)
-		{
-			return when_all_awaitable_value<Awaitables...> { std::forward<Awaitables>(awaitables)... };
-		}
 
 		template<class...Awaitables>
 		inline auto when_all(Awaitables &&...awaitables)
@@ -215,29 +183,28 @@ namespace corsl
 			static_assert(sizeof...(Awaitables) >= 2, "when_all must be passed at least two arguments");
 			using first_type = decltype(get_first_result_type(awaitables...));
 
-			return when_all_impl(
-				std::conjunction<
-				std::is_same<result_type<void>, first_type>,
-				are_all_same_t<decltype(get_result_type(awaitables))...>
-				>{}, std::forward<Awaitables>(awaitables)...);
+			if constexpr (std::same_as<result_type<void>, first_type> && are_all_same_t<decltype(get_result_type(awaitables))...>::value)
+				return when_all_awaitable_void{ std::forward<Awaitables>(awaitables)... };
+			else
+				return when_all_awaitable_value{ std::forward<Awaitables>(awaitables)... };
 		}
 
 		// 2. Range version
-		// Awaitables are passed as a pair of iterators
+		// Awaitables are passed as ranges
 
 		// void case
-		template<class Iterator>
+		template<sr::range Range>
 		struct range_when_all_awaitable_base
 		{
-			using value_type = typename std::iterator_traits<Iterator>::value_type;
+			using value_type = sr::range_value_t<Range>;
 
 			std::exception_ptr exception;
 			std::vector<value_type> tasks_;
 			std::atomic<int> counter;
 			std::coroutine_handle<> resume;
 
-			range_when_all_awaitable_base(const Iterator &begin, const Iterator &end) :
-				tasks_{ begin,end },
+			range_when_all_awaitable_base(Range &&range) :
+				tasks_{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
 				counter{ static_cast<int>(tasks_.size()) }
 			{}
 
@@ -278,11 +245,11 @@ namespace corsl
 			}
 		};
 
-		template<class Iterator>
-		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Iterator>
+		template<class Range>
+		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Range>
 		{
-			range_when_all_awaitable_void(const Iterator &begin, const Iterator &end) :
-				range_when_all_awaitable_base<Iterator>{ begin,end }
+			range_when_all_awaitable_void(Range &&range) :
+				range_when_all_awaitable_base<Range>{ std::move(range) }
 			{}
 
 			template<size_t N>
@@ -320,15 +287,15 @@ namespace corsl
 			};
 		}
 
-		template<class Iterator>
-		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Iterator>
+		template<sr::range Range>
+		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Range>
 		{
-			using result_type = decltype(get_result_type(std::declval<typename range_when_all_awaitable_base<Iterator>::value_type>()));
+			using result_type = decltype(get_result_type(std::declval<typename range_when_all_awaitable_base<Range>::value_type>()));
 			using results_t = std::vector<std::decay_t<typename result_type::type>>;
 			results_t results;
 
-			range_when_all_awaitable_value(const Iterator &begin, const Iterator &end) :
-				range_when_all_awaitable_base<Iterator>{ begin,end },
+			range_when_all_awaitable_value(Range &&range) :
+				range_when_all_awaitable_base<Range>{ std::move(range) },
 				results(this->tasks_.size())
 			{}
 
@@ -357,24 +324,14 @@ namespace corsl
 			}
 		};
 
-		template<class Iterator>
-		inline auto when_all_range_impl(std::true_type, const Iterator &begin, const Iterator &end)
+		template<sr::range Range>
+		inline auto when_all_range(Range &&range)
 		{
-			return range_when_all_awaitable_void<Iterator>{ begin, end };
-		}
-
-		template<class Iterator>
-		inline auto when_all_range_impl(std::false_type, const Iterator &begin, const Iterator &end)
-		{
-			return range_when_all_awaitable_value<Iterator>{ begin, end };
-		}
-
-		template<class Iterator>
-		inline auto when_all_range(const Iterator &begin, const Iterator &end)
-		{
-			using type = decltype(get_result_type(*begin));
-
-			return when_all_range_impl(std::is_same<result_type<void>, type>{}, begin, end);
+			using type = decltype(get_result_type(*sr::begin(range)));
+			if constexpr (std::same_as<result_type<void>, type>)
+				return range_when_all_awaitable_void{ std::move(range) };
+			else
+				return range_when_all_awaitable_value{ std::move(range) };
 		}
 	}
 

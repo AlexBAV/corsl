@@ -38,8 +38,7 @@ namespace corsl
 			void resume(bool background) noexcept
 			{
 				std::unique_lock l{ lock };
-				auto continuation = std::exchange(resume_location, std::coroutine_handle<>{});
-				if (continuation)
+				if (auto continuation = std::exchange(resume_location, std::coroutine_handle<>{}))
 				{
 					l.unlock();
 					if (background)

@@ -15,7 +15,7 @@ namespace corsl
 {
 	namespace details
 	{
-		// Simplified version of hresult_error
+		// Simplified version of cppwinrt's hresult_error
 		// May be used on Vista+
 		class hresult_error
 		{

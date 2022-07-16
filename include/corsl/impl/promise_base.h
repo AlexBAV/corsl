@@ -15,13 +15,6 @@ namespace corsl
 {
 	namespace details
 	{
-		//enum class status_t
-		//{
-		//	running,
-		//	ready,
-		//	exception
-		//};
-
 		struct __declspec(empty_bases) promise_base0
 		{
 			std::atomic<bool> cancelled{ false };

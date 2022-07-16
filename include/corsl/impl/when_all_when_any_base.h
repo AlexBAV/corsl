@@ -82,36 +82,27 @@ namespace corsl
 			return {};
 		}
 
-		// primary template handles types that do not implement await_resume:
-		template<class, class = std::void_t<>>
-		struct has_await_resume : std::false_type {};
-
-		// specialization recognizes types that do implement await_resume
 		template<class T>
-		struct has_await_resume<T, std::void_t<decltype(std::declval<T&>().await_resume())>> : std::true_type {};
+		concept has_await_resume = requires(T & v)
+		{
+			v.await_resume();
+		};
 
 		template<class T>
-		constexpr bool has_await_resume_v = has_await_resume<T>::value;
-
-		// "external" case
-		template<class, class = std::void_t<>>
-		struct has_external_await_resume : std::false_type {};
-
-		template<class T>
-		struct has_external_await_resume<T, std::void_t<decltype(await_resume(std::declval<T &>()))>> : std::true_type {};
-
-		template<class T>
-		constexpr bool has_external_await_resume_v = has_external_await_resume<T>::value;
+		concept has_external_await_resume = requires(T & v)
+		{
+			await_resume(v);
+		};
 
 		//
-		template<class T>
-		constexpr result_type<decltype(std::declval<T &>().await_resume())> get_result_type(const T &, std::enable_if_t<has_await_resume_v<T>, void *> = nullptr)
+		template<has_await_resume T>
+		constexpr result_type<decltype(std::declval<T &>().await_resume())> get_result_type(const T &)
 		{
 			return {};
 		}
 
-		template<class T>
-		constexpr result_type<decltype(await_resume(std::declval<T &>()))> get_result_type(const T &, std::enable_if_t<has_external_await_resume_v<T>, void *> = nullptr)
+		template<has_external_await_resume T>
+		constexpr result_type<decltype(await_resume(std::declval<T &>()))> get_result_type(const T &)
 		{
 			return {};
 		}

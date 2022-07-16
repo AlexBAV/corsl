@@ -27,7 +27,7 @@ namespace corsl
 		{
 			std::coroutine_handle<> handle;
 			Master *master;
-			std::variant<std::exception_ptr, T> value;
+			std::variant<std::monostate, std::exception_ptr, T> value;
 
 			aq_awaitable(Master *master) noexcept :
 				master{ master }
@@ -60,7 +60,8 @@ namespace corsl
 
 			T await_resume()
 			{
-				if (value.index() == 0)
+				assert(value.index() != 0 && "broken invariant");
+				if (value.index() == 1)
 					std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
 				else
 					return std::get<T>(std::move(value));
@@ -79,9 +80,9 @@ namespace corsl
 			awaitable *current{ nullptr };
 			std::exception_ptr exception{};
 
-			bool is_ready(std::variant<std::exception_ptr, T> &value) noexcept
+			bool is_ready(std::variant<std::monostate, std::exception_ptr, T> &value) noexcept
 			{
-				std::unique_lock l{ queue_lock };
+				std::scoped_lock l{ queue_lock };
 				if (exception)
 				{
 					value = exception;
@@ -98,7 +99,7 @@ namespace corsl
 
 			bool set_awaitable(awaitable *pointer)
 			{
-				std::unique_lock l{ queue_lock };
+				std::scoped_lock l{ queue_lock };
 				if (exception)
 					std::rethrow_exception(exception);
 				if (!queue.empty())

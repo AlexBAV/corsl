@@ -21,5 +21,7 @@
 #include <cassert>
 #include <coroutine>
 #include <variant>
+#include <concepts>
+#include <ranges>
 
 #include <winrt/base.h>

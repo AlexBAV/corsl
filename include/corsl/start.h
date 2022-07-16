@@ -17,16 +17,13 @@ namespace corsl
 	{
 		// start
 		// methods "starts" an asynchronous operation that only starts in await_suspend
-		template<class Awaitable>
-		inline future<void> istart(result_type<void>, Awaitable task)
-		{
-			co_await task;
-		}
-
 		template<class T, class Awaitable>
 		inline auto istart(result_type<T>, Awaitable task) -> future<T>
 		{
-			co_return co_await task;
+			if constexpr (std::same_as<void, T>)
+				co_await task;
+			else
+				co_return co_await task;
 		}
 
 		template<class Awaitable>

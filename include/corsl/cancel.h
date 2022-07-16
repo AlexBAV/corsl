@@ -63,12 +63,12 @@ namespace corsl
 			virtual fire_and_forget<> run() override
 			{
 				{
-					std::lock_guard<srwlock> l{ lock };
+					std::scoped_lock l{ lock };
 					completed = false;
 				}
 				co_await resume_background();
 				f();
-				std::lock_guard<srwlock> l{ lock };
+				std::scoped_lock l{ lock };
 				completed = true;
 				cv.wake_one();
 			}
@@ -81,7 +81,7 @@ namespace corsl
 			~cancellation_subscription()
 			{
 				remove();
-				std::lock_guard<srwlock> l{ lock };
+				std::scoped_lock l{ lock };
 				cv.wait_while(lock, [this] { return !completed; });
 			}
 		};

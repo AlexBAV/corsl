@@ -73,7 +73,7 @@ namespace corsl
 				DestroyThreadpoolEnvironment(&tphandle);
 			}
 
-			// The callback environment is not copiable, nor moveable
+			// The callback environment is not copyable, nor movable
 			callback_environment(const callback_environment &) = delete;
 			callback_environment &operator =(const callback_environment &) = delete;
 

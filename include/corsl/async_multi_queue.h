@@ -39,9 +39,9 @@ namespace corsl
 			std::exception_ptr exception{};
 			PTP_CALLBACK_ENVIRON pce{};
 
-			bool is_ready(std::variant<std::exception_ptr, T> &value)
+			bool is_ready(std::variant<std::monostate, std::exception_ptr, T> &value)
 			{
-				std::unique_lock l{ queue_lock };
+				std::scoped_lock l{ queue_lock };
 				if (exception)
 				{
 					value = exception;
@@ -58,7 +58,7 @@ namespace corsl
 
 			bool set_awaitable(awaitable *pointer)
 			{
-				std::unique_lock l{ queue_lock };
+				std::scoped_lock l{ queue_lock };
 				if (exception)
 					std::rethrow_exception(exception);
 				if (!queue.empty())
@@ -140,7 +140,10 @@ namespace corsl
 			template<class...Args>
 			void emplace(Args &&...args)
 			{
-				push(T(std::forward<Args>(args)...));
+				std::unique_lock l{ queue_lock };
+				if (!exception)
+					queue.emplace(std::forward<Args>(args)...);
+				drain(std::move(l));
 			}
 
 			void cancel()

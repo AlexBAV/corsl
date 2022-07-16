@@ -105,12 +105,12 @@ namespace corsl
 		class  __declspec(empty_bases) future_base
 		{
 		protected:
-			const T &iget(T &value) const &
+			const T &iget(T &value) const & noexcept
 			{
 				return value;
 			}
 
-			T &&iget(T &value) &&
+			T &&iget(T &value) && noexcept
 			{
 				return std::move(value);
 			}
@@ -121,7 +121,7 @@ namespace corsl
 		{
 		protected:
 			template<class T>
-			void iget(T &) const
+			void iget(T &) const noexcept
 			{
 			}
 		};

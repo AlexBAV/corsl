@@ -21,25 +21,25 @@ namespace corsl
 			std::shared_ptr<promise_type> promise_{ std::make_shared<promise_type>() };
 
 			template<class A, class V>
-			std::enable_if_t<!std::is_same_v<void, A>> iset(V &&v) noexcept
+			void iset(V &&v) noexcept requires !std::same_as<void, A>
 			{
 				promise_->return_value(std::forward<V>(v));
 			}
 
 			template<class A>
-			std::enable_if_t<std::is_same_v<void, A>> iset() noexcept
+			void iset() noexcept requires std::same_as<void, A>
 			{
 				promise_->return_void();
 			}
 
 			template<class A, class V>
-			std::enable_if_t<!std::is_same_v<void, A>> iset_async(V &&v) noexcept
+			void iset_async(V &&v) noexcept requires !std::same_as<void, A>
 			{
 				promise_->return_value_async(std::forward<V>(v));
 			}
 
 			template<class A>
-			std::enable_if_t<std::is_same_v<void, A>> iset_async() noexcept
+			void iset_async() noexcept requires std::same_as<void, A>
 			{
 				promise_->return_void_async();
 			}
