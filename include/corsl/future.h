@@ -51,6 +51,14 @@ namespace corsl
 				check_resume(std::move(l));
 			}
 
+			fire_and_forget<> internal_set_exception_async(std::exception_ptr &&exception) noexcept
+			{
+				std::unique_lock<srwlock> l{ lock };
+				value = std::move(exception);
+				co_await resume_background();
+				check_resume(std::move(l));
+			}
+
 			void unhandled_exception() noexcept
 			{
 				std::unique_lock<srwlock> l{ lock };

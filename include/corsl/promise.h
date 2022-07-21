@@ -73,6 +73,11 @@ namespace corsl
 				promise_->internal_set_exception(std::move(ex));
 			}
 
+			void set_exception_async(std::exception_ptr &&ex) noexcept
+			{
+				promise_->internal_set_exception_async(std::move(ex));
+			}
+
 			future<T> get_future() const noexcept
 			{
 				return promise_->get_return_object();
