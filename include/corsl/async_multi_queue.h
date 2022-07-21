@@ -63,36 +63,29 @@ namespace corsl
 					std::rethrow_exception(exception);
 				if (!queue.empty())
 				{
-					pointer->set_result(std::move(queue.front()));
+					auto v = std::move(queue.front());
 					queue.pop();
+					pointer->set_result(std::move(v));
 					return false;
 				}
 				clients.push_back(*pointer);
 				return true;
 			}
 
-			bool drain([[maybe_unused]] std::unique_lock<srwlock> &&lock)
+			void drain([[maybe_unused]] std::unique_lock<srwlock> &&lock, T &&value)
 			{
-				lock;
+				lock;	// executing under lock
 				if (!clients.empty())
 				{
 					auto it = clients.begin();
 					auto *cur = std::addressof(*it);
 					clients.erase(it);
 
-					if (exception)
-						cur->set_exception(exception);
-					else
-					{
-						auto v = std::move(queue.front());
-						cur->set_result(std::move(v));
-						queue.pop();
-					}
+					cur->set_result(std::move(value));
 					resume_on_background<CallbackPolicy>(cur->handle);
-					return true;
 				}
 				else
-					return false;
+					queue.emplace(std::move(value));
 			}
 
 		public:
@@ -133,8 +126,7 @@ namespace corsl
 			{
 				std::unique_lock l{ queue_lock };
 				if (!exception)
-					queue.emplace(std::forward<V>(item));
-				drain(std::move(l));
+					drain(std::move(l), T{ std::forward<V>(item) });
 			}
 
 			template<class...Args>
@@ -142,17 +134,21 @@ namespace corsl
 			{
 				std::unique_lock l{ queue_lock };
 				if (!exception)
-					queue.emplace(std::forward<Args>(args)...);
-				drain(std::move(l));
+					drain(std::move(l), T{ std::forward<Args>(args)... });
 			}
 
 			void cancel()
+			{
+				push_exception(std::make_exception_ptr(operation_cancelled{}));
+			}
+
+			void push_exception(std::exception_ptr exception_)
 			{
 				decltype(clients) clients_copy;
 
 				{
 					std::unique_lock l{ queue_lock };
-					exception = std::make_exception_ptr(operation_cancelled{});
+					exception = exception_;
 					std::swap(clients, clients_copy);
 				}
 
@@ -160,16 +156,10 @@ namespace corsl
 				const auto e = clients_copy.end();
 				for (decltype(b) next; b != e; b = next)
 				{
+					b->set_exception(exception_);
 					next = std::next(b);
 					resume_on_background<CallbackPolicy>(b->handle);
 				}
-			}
-
-			void push_exception(std::exception_ptr exception_)
-			{
-				std::unique_lock l{ queue_lock };
-				exception = std::move(exception_);
-				drain(std::move(l));
 			}
 
 			awaitable next() noexcept
@@ -179,13 +169,9 @@ namespace corsl
 
 			void clear() noexcept
 			{
-				queue_t empty_queue;
 				std::unique_lock l{ queue_lock };
-				queue.swap(empty_queue);
-				exception = std::make_exception_ptr(operation_cancelled{});
-
-				while (drain(std::move(l)))
-					;
+				assert(clients.empty());
+				std::exchange(queue, queue_t{});
 				exception = {};
 			}
 
