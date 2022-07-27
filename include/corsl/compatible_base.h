@@ -299,6 +299,8 @@ namespace corsl
 		template<class CallbackPolicy = callback_policy::empty>
 		struct resumable_io
 		{
+			resumable_io() = default;
+
 			resumable_io(HANDLE object) :
 				m_io(check_pointer(CreateThreadpoolIo(object, awaitable_base<CallbackPolicy>::callback, nullptr, nullptr)))
 			{
