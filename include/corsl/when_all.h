@@ -193,18 +193,27 @@ namespace corsl
 		// Awaitables are passed as ranges
 
 		// void case
-		template<sr::range Range>
+		template<class Awaitable>
 		struct range_when_all_awaitable_base
 		{
-			using value_type = sr::range_value_t<Range>;
+			using value_type = Awaitable;
+
+			static constexpr const bool is_copyable = std::copyable<Awaitable>;
 
 			std::exception_ptr exception;
 			std::vector<value_type> tasks_;
 			std::atomic<int> counter;
 			std::coroutine_handle<> resume;
 
-			range_when_all_awaitable_base(Range &&range) :
+			template<sr::range Range>
+			range_when_all_awaitable_base(Range &&range) requires !is_copyable :
 				tasks_{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
+				counter{ static_cast<int>(tasks_.size()) }
+			{}
+
+			template<sr::range Range>
+			range_when_all_awaitable_base(Range &&range) requires is_copyable :
+				tasks_{ sr::begin(range), sr::end(range) },
 				counter{ static_cast<int>(tasks_.size()) }
 			{}
 
@@ -245,11 +254,12 @@ namespace corsl
 			}
 		};
 
-		template<class Range>
-		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Range>
+		template<class Awaitable>
+		struct range_when_all_awaitable_void : range_when_all_awaitable_base<Awaitable>
 		{
+			template<sr::range Range>
 			range_when_all_awaitable_void(Range &&range) :
-				range_when_all_awaitable_base<Range>{ std::move(range) }
+				range_when_all_awaitable_base<Awaitable>{ std::forward<Range>(range) }
 			{}
 
 			template<size_t N>
@@ -287,15 +297,16 @@ namespace corsl
 			};
 		}
 
-		template<sr::range Range>
-		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Range>
+		template<class Awaitable>
+		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Awaitable>
 		{
-			using result_type = decltype(get_result_type(std::declval<typename range_when_all_awaitable_base<Range>::value_type>()));
+			using result_type = decltype(get_result_type(std::declval<typename range_when_all_awaitable_base<Awaitable>::value_type>()));
 			using results_t = std::vector<std::decay_t<typename result_type::type>>;
 			results_t results;
 
+			template<sr::range Range>
 			range_when_all_awaitable_value(Range &&range) :
-				range_when_all_awaitable_base<Range>{ std::move(range) },
+				range_when_all_awaitable_base<Awaitable>{ std::forward<Range>(range) },
 				results(this->tasks_.size())
 			{}
 
@@ -327,11 +338,12 @@ namespace corsl
 		template<sr::range Range>
 		inline auto when_all_range(Range &&range)
 		{
-			using type = decltype(get_result_type(*sr::begin(range)));
+			using future_type = sr::range_value_t<Range>;
+			using type = decltype(get_result_type(std::declval<const future_type &>()));
 			if constexpr (std::same_as<result_type<void>, type>)
-				return range_when_all_awaitable_void{ std::move(range) };
+				return range_when_all_awaitable_void<future_type> { std::forward<Range>(range) };
 			else
-				return range_when_all_awaitable_value{ std::move(range) };
+				return range_when_all_awaitable_value<future_type> { std::forward<Range>(range) };
 		}
 	}
 
