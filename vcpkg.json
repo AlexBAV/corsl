@@ -1,0 +1,15 @@
+{
+	"name": "corsl-sample",
+	"version-string": "1.0.0",
+	"dependencies": [
+		{
+			"name": "boost-mp11",
+			"version>=": "1.79.0"
+		},
+		{
+			"name": "boost-intrusive",
+			"version>=": "1.79.0"
+		}
+	],
+	"builtin-baseline": "e6a000679745f8ea3f98067e5f3753d3cbecb948"
+}
