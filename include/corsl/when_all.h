@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // corsl - Coroutine Support Library
-// Copyright (C) 2017 HHD Software Ltd.
+// Copyright (C) 2017 - 2022 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -14,10 +14,7 @@ namespace corsl
 {
 	namespace details
 	{
-		namespace sr = std::ranges;
-		namespace rv = std::views;
 		// when_all
-
 		// 1. Variadic case
 		// Awaitables are passed as direct arguments to when_all
 		template<size_t Index, class Master, class Awaitable>
@@ -25,7 +22,7 @@ namespace corsl
 		{
 			try
 			{
-				if constexpr (std::same_as<result_type<void>, decltype(get_result_type(task))>)
+				if constexpr (std::same_as<result_type<void>, get_result_type_t<Awaitable>>)
 				{
 					co_await task;
 					master.finished(std::integral_constant<size_t, Index>{});
@@ -124,21 +121,9 @@ namespace corsl
 		struct when_all_awaitable_value : when_all_awaitable_base<Awaitables...>
 		{
 			template<class T>
-			struct transform
-			{
-				using type = std::conditional_t<std::is_same_v<result_type<void>, T>, no_result, std::decay_t<typename T::type>>;
-			};
+			using transform_t = std::conditional_t<std::same_as<result_type<void>, T>, no_result, std::decay_t<typename T::type>>;
 
-			template<class T>
-			using transform_t = typename transform<T>::type;
-
-			template<class...Ts>
-			struct get_results_type
-			{
-				using type = std::tuple<transform_t<Ts>...>;
-			};
-
-			using results_t = typename get_results_type<decltype(get_result_type(std::declval<Awaitables>()))...>::type;
+			using results_t = std::tuple<transform_t<get_result_type_t<Awaitables>>...>;
 			results_t results;
 
 			when_all_awaitable_value(Awaitables &&...awaitables) noexcept :
@@ -181,9 +166,10 @@ namespace corsl
 		inline auto when_all(Awaitables &&...awaitables)
 		{
 			static_assert(sizeof...(Awaitables) >= 2, "when_all must be passed at least two arguments");
-			using first_type = decltype(get_first_result_type(awaitables...));
 
-			if constexpr (std::same_as<result_type<void>, first_type> && are_all_same_t<decltype(get_result_type(awaitables))...>::value)
+			using result_types = mp11::mp_list<get_result_type_t<Awaitables>...>;
+
+			if constexpr (std::same_as<result_type<void>, mp11::mp_first<result_types>> && mp11::mp_apply<mp11::mp_same, result_types>::value)
 				return when_all_awaitable_void{ std::forward<Awaitables>(awaitables)... };
 			else
 				return when_all_awaitable_value{ std::forward<Awaitables>(awaitables)... };
@@ -191,28 +177,22 @@ namespace corsl
 
 		// 2. Range version
 		// Awaitables are passed as ranges
-
-		// void case
 		template<class Awaitable>
 		struct range_when_all_awaitable_base
 		{
-			using value_type = Awaitable;
-
-			static constexpr const bool is_copyable = std::copyable<Awaitable>;
-
 			std::exception_ptr exception;
-			std::vector<value_type> tasks_;
+			std::vector<Awaitable> tasks_;
 			std::atomic<int> counter;
 			std::coroutine_handle<> resume;
 
 			template<sr::range Range>
-			range_when_all_awaitable_base(Range &&range) requires !is_copyable :
+			range_when_all_awaitable_base(Range &&range) requires !std::copyable<Awaitable> :
 				tasks_{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
 				counter{ static_cast<int>(tasks_.size()) }
 			{}
 
 			template<sr::range Range>
-			range_when_all_awaitable_base(Range &&range) requires is_copyable :
+			range_when_all_awaitable_base(Range &&range) requires std::copyable<Awaitable> :
 				tasks_{ sr::begin(range), sr::end(range) },
 				counter{ static_cast<int>(tasks_.size()) }
 			{}
@@ -300,7 +280,7 @@ namespace corsl
 		template<class Awaitable>
 		struct range_when_all_awaitable_value : range_when_all_awaitable_base<Awaitable>
 		{
-			using result_type = decltype(get_result_type(std::declval<typename range_when_all_awaitable_base<Awaitable>::value_type>()));
+			using result_type = get_result_type_t<Awaitable>;
 			using results_t = std::vector<std::decay_t<typename result_type::type>>;
 			results_t results;
 
@@ -338,8 +318,8 @@ namespace corsl
 		template<sr::range Range>
 		inline auto when_all_range(Range &&range)
 		{
-			using future_type = sr::range_value_t<Range>;
-			using type = decltype(get_result_type(std::declval<const future_type &>()));
+			using future_type = std::decay_t<sr::range_value_t<Range>>;
+			using type = get_result_type_t<future_type>;
 			if constexpr (std::same_as<result_type<void>, type>)
 				return range_when_all_awaitable_void<future_type> { std::forward<Range>(range) };
 			else

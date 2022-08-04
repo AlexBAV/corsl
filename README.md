@@ -12,7 +12,7 @@ Library is header-only and consists of several headers. The only external depend
 
 ## Compiler Support
 
-The library has been tested on Microsoft Visual Studio 2017 Version 15.4.1.
+The library has been tested on Microsoft Visual Studio 2022 Version 17.2.6.
 
 ## Documentation
 
@@ -21,6 +21,7 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.4.1.
 ## TOC
 
 * [`srwlock` Class](#srwlock-class)
+* [Thread Pool Helper Classes](#thread-pool-helper-classes)
 * ["Compatible" Versions of Awaitables from `cppwinrt`](#compatible-versions-of-awaitables-from-cppwinrt)
 * [`future<T>`: Light-Weight Awaitable Class](#futuret-light-weight-awaitable-class)
 * [`shared_future<T>` Class](#shared_futuret-class)
@@ -31,6 +32,7 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.4.1.
 * [`when_all` Function](#when_all-function)
 * [`when_any` Function](#when_any-function)
 * [`async_queue` Class](#async_queue-class)
+* [`async_multi_consumer_queue` Class](#asyncmulticonsumerqueue-class)
 * [Cancellation Support](#cancellation-support)
 
 ### `srwlock` Class
@@ -39,56 +41,137 @@ The library has been tested on Microsoft Visual Studio 2017 Version 15.4.1.
 #include <corsl/srwlock.h>
 ```
 
-`std::mutex` and other mutual exclusion classes from Standard Library often cannot be used in coroutines. This is because according to Standard mutex must be released by the same thread that acquired it. This is not a case for a coroutine as parts of a coroutine are often executed by different threads.
+`std::mutex` and other mutual exclusion classes from Standard Library often cannot be used in coroutines. This is because according to Standard, mutex must be released by the same thread that acquired it. This is not a case for a coroutine as parts of a coroutine are often executed by different threads.
 
-`cppwinrt` has a `srwlock` class, but, unfortunately, it does not follow the standard "interface" of STL `mutex`.
+`corsl::srwlock` is compatible with `std::shared_mutex` class and, therefore, may be used with lock adapters like `std::lock_guard`, `std::scoped_lock`, `std::unique_lock` and `std::shared_lock`.
 
-`corsl::srwlock` is compatible with `std::shared_mutex` class and, therefore, may be used with lock adapters like `std::lock_guard<T>`, `std::unique_lock<T>` and `std::shared_lock<T>`.
+### Thread Pool Helper Classes
 
-Note that this is no longer true with `cppwinrt` release 2017.10.13.1. They now have classes `mutex`, `shared_mutex`, `lock_guard` and `shared_lock_guard`, but they are still defined in their internal namespace.
+The library defines `thread_pool` and `callback_environment` classes in `thread_pool.h` file that allow you to create a custom instance of a thread pool and us it in other parts of the library. If not used, the process default thread pool is used by default.
+
+Thread pool (implemented as `thread_pool` class) has a default constructor as well as constructor taking minimum and maximum number of threads. Callback environment (implemented as `callback_environment` class) allows configuration of *callback library* (`set_library` method), *callback priority* (`set_callback_priority` method) and thread pool (`set_pool` method).
+
+Almost all relevant library classes are templated on the callback policy class. By default, `corsl::callback_policy::empty` policy is used, which does not introduce any callback specific behavior. Use `corsl::callback_policy::store` policy to get access to advanced Windows Thread Pool APIs:
+
+```C++
+corsl::cancellation_source ui_timer_cancel;
+corsl::tp_timer_ex<corsl::callback_policy::store> ui_timer;
+
+corsl::future<> run_ui_timer()
+{
+    corsl::cancellation_token token{ co_await ui_timer_cancel };
+    corsl::cancellation_subscription s{ token,
+        [this]
+        {
+            ui_timer.cancel();
+        }};
+
+    try
+    {
+        while (!token)
+        {
+            co_await ui_timer.wait();
+            co_await back_to_ui_thread();
+            execute_idle_processing();
+        }
+    }
+    catch (const corsl::hresult_error &)
+    {
+    }
+    // Instruct Windows Thread Pool to signal event when coroutine exits
+    corsl::get_current_callback().set_event_when_callback_returns(clear_completed_callback);
+}
+```
+
+The current callback object is obtained using `corsl::get_current_callback()` method. Use the following members of the returned object to set advanced callback properties:
+
+```C++
+disassociate_current_thread();
+free_library_when_callback_exits(HMODULE lib);
+leave_critical_section_when_callback_returns(PCRITICAL_SECTION ps);
+release_mutex_when_callback_returns(HANDLE mutex);
+release_semaphore_when_callback_returns(HANDLE semaphore, uint32_t crel);
+set_event_when_callback_returns(HANDLE event);
+may_run_long();
+```
 
 ### "Compatible" Versions of Awaitables from `cppwinrt`
 
-`compatible_base.h` includes copies of the following `cppwinrt` classes:  `resume_background`, `resume_after`, `resume_on_signal`, `resumable_io` and `fire_and_forget`.
+`compatible_base.h` includes a number of helper awaitables and functions:
 
-Motivation for having those classes copied into `corsl` namespace is because they use `hresult_error` class that requires Windows Runtime.
+#### `resume_background()` and `resume_background_long()`
+
+Coroutine may await these functions result to force its continuation on another thread pool thread. The `resume_background_long()` in addition marks processing as "long", giving a hint to thread pool API.
+
+Both those methods may be passed a reference to a callback environment.
+
+#### `resume_after`
+
+`resume_after` class is constructed with a timeout value and when awaited, completes after specified number of time passes. If `corsl::timer` namespace is brought to the current namespace, one can use standard `std::chrono` suffixes with `co_await` operator:
+
+```C++
+using namespace corsl::timer;
+
+corsl::future<> test()
+{
+    co_await 5s;
+}
+```
+
+#### `resume_on_signal`
+
+This class is constructed with a kernel synchronization object (like event, mutex, process, thread and so on) and, when awaited, completes as soon as a given object is signaled.
+
+```C++
+HANDLE h = CreateEventW(...);
+...
+co_await corsl::resume_on_signal { h };
+...
+```
+
+#### `resumable_io`
+
+This class allows to execute I/O operations on a thread pool and wait for their completion.
+
+```C++
+HANDLE h = CreateFileW(...);
+corsl::resumable_io io{ h };
+
+co_await io.start([&](OVERLAPPED &o)
+{
+    corsl::check_io(ReadFile(h, buffer, buffer_size, nullptr, &o));
+});
+```
+
+Execution may be optimized if I/O can potentially complete synchronously:
+
+```C++
+HANDLE h = CreateFileW(...);
+// We MUST turn the following option ON:
+SetFileCompletionNotificationModes(h, FILE_SKIP_COMPLETION_PORT_ON_SUCCESS);
+corsl::resumable_io io{ h };
+
+co_await io.start_pending([&](OVERLAPPED &o)
+{
+    if (ReadFile(h, buffer, buffer_size, nullptr, &o))
+        return false;
+    else
+    {
+        if (auto err = GetLastError(); err == ERROR_IO_PENDING)
+            return true;
+        else
+            corsl::throw_win32_error(err);
+    }
+});
+```
 
 `corsl` has simplified version of `hresult_error` that does not require Windows Runtime. Therefore, if the user is going to target older OS versions, these versions must be used instead of original versions from `winrt` namespace.
 
 **Note**: `winrt::hresult_error` and `corsl::hresult_error` classes are unrelated!
 
+#### `fire_and_forget`
+
 `fire_and_forget` class is like a `void` coroutine. Use it if you don't care about the coroutine return value and do not need to await it or block wait for it.
-
-```C++
-#include <corsl/compatible_base.h>
-#include <corsl/future.h>
-
-using namespace std::chrono_literals;
-using namespace corsl::timer;   // this line is required for "co_await duration"
-
-corsl::future<void> coroutine1()
-{
-  // illustrate corsl::resume_background
-  co_await corsl::resume_background{};
-
-  // illustrate corsl::resume_after
-  co_await 2s;
-
-  auto event_handle = CreateEvent(...);
-
-  // illustrate corsl::resume_on_signal
-  co_await corsl::resume_on_signal { event_handle }; 
-
-  // illustrate corsl::resumable_io
-  auto file_handle = CreateFile(...);
-
-  corsl::resumable_io io { file_handle };
-
-  co_await io.start(...);
-}
-```
-
-In addition to `resume_background` class, library has `resume_background_long` class. An instance of this class should be awaited instead of `resume_background` if the coroutine is going to spend **long** time before the next suspension point. This is only a hint to the thread pool implementation, though.
 
 ### `future<T>`: Light-Weight Awaitable Class
 
@@ -106,7 +189,7 @@ Using `co_await` or calling `wait` or `get` with a default-initialized `future` 
 
 #### Notes
 
-1. In the current version, when `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case co_await is applied to a rvalue reference (or temporary).
+1. When `await_resume` is called as part of execution of `co_await` expression, future's value is _moved_ to the caller in case `co_await` is applied to a rvalue reference (or temporary).
 2. `future<T>` must only be awaited once. Calling `get` or `wait` counts as well. Library will fire an assertion in debug mode if `future` is awaited more than once. However, it is allowed to have multiple calls to `get` or `wait` on already completed future. If you need to await multiple times, use `shared_future` class instead.
 3. `future<T>` integrates with library's [cancellation support](#cancellation-support). If a cancellation source is associated with a future and it is cancelled, any `co_await` expression automatically throws an exception.
 
@@ -130,7 +213,7 @@ Awaiting or blocking on default-constructed (or moved-from) `shared_future<T>` i
 corsl::promise<int> promise;
 corsl::shared_future<int> shared_future{ promise.get_future() };
 
-auto event = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+auto event = CreateEventW(nullptr, true, false, nullptr);
 std::atomic<int> counter{ 0 };
 
 for (int i = 0; i < 10; ++i)
@@ -138,7 +221,7 @@ for (int i = 0; i < 10; ++i)
     [&](int i) -> corsl::fire_and_forget
     {
         using namespace std::string_literals;
-        co_await corsl::resume_background{};
+        co_await corsl::resume_background();
         std::wcout << (std::to_wstring(i + 1) + L". shared_future await completed with result "s + std::to_wstring(co_await shared_future) + L"\n"s);
         if (counter.fetch_add(1, std::memory_order_relaxed) == 9)
             SetEvent(event);
@@ -156,9 +239,11 @@ CloseHandle(event);
 #include <corsl/promise.h>
 ```
 
-PPL provides `task_completion_event` class that may be used to perform late completion of tasks. `corsl` provides similar functionality with a help of its `promise<T>` class. `T` is a promise result type or `void`. Reference types are not allowed.
+`corsl` provides the `promise<T>` class to perform late completion of tasks. `T` is a promise result type or `void`. Reference types are not allowed.
 
-After construction, a related future object may be created by calling `get_future` method. When the operation result is received, `set` method is called to set the promise value or `set_exception` if exception has occurred. Corresponding future object is then completed and the result (or exception) is propagated to the continuation.
+After construction, a related future object may be created by calling `get_future` method. 
+
+When operation completes, you can set the promise result with a call to `set` or `set_async` method. If you want to set an exception, call `set_exception` or `set_exception_async` method. An associated future is completed (on another thread pool thread for **_async** versions) and any coroutine that awaits it is resumed.
 
 It is prohibited to call `get_future` method multiple times. If you need multiple continuations, obtain a promise's future and then construct a `shared_future` from it.
 
@@ -184,7 +269,7 @@ void complete_async_operation()
 #include <corsl/start.h>
 ```
 
-`cppwinrt` provides a number of convenient utility classes to initiate asynchronous waits and I/O, among other things. The only problem with those classes is that the operation does not start until the caller begins _awaiting_ its result. Consider the following:
+Several awaitable classes defined by this library do not start their associated operations until someone *awaits* them with a `co_await` operator. Consider the following:
 
 ```C++
 corsl::future<void> coroutine1()
@@ -195,9 +280,9 @@ corsl::future<void> coroutine1()
 }
 ```
 
-In this code snippet, `co_await 3s;` is translated to `co_await resume_after{3s};`. `resume_after` is an _awaitable_ that starts a timer on thread pool and schedules a continuation. The problem is that you cannot *start* a timer and continue your work.
+In this code snippet, `co_await 3s;` is translated to `co_await resume_after{3s};`. `resume_after` is an *awaitable* that starts a timer on thread pool and schedules a continuation. The problem is that you cannot *start* a timer and continue your work.
 
-The same problem exists with `resumeable_io` class:
+The same problem exists with `resumeable_io` class, for example:
 
 ```C++
 corsl::resumable_io io{handle};
@@ -206,13 +291,13 @@ corsl::future<void> coroutine2()
 {
     co_await io.start([](OVERLAPPED &o)
     {
-       check(::ReadFile(handle,...));
+       corsl::check_io(::ReadFile(handle,...));
     });
     // ...
 }
 ```
 
-And again, you cannot start an I/O and do other stuff before you _await_ for operation result.
+And again, you cannot start an I/O and do other stuff before you *await* the operation.
 
 `corsl` provides simple wrapper function that starts an asynchronous operation for you:
 
@@ -306,7 +391,7 @@ corsl::future<void> coroutine5()
     {
         auto bytes_received = co_await io.start([](OVERLAPPED &o)
         {
-            check(::ReadFile(handle_to_serial_port, ... ));
+            corsl::check_io(::ReadFile(handle_to_serial_port, ... ));
         }, 10s);
         // Operation succeeded, continue processing
     } catch(const corsl::operation_cancelled &)
@@ -323,13 +408,9 @@ corsl::future<void> coroutine5()
 
 `when_all` function accepts any number of awaitables and produces an awaitable that is completed only when all input tasks are completed. If at least one of the tasks throws, the first thrown exception is rethrown by `when_all`.
 
-Every input parameter must either be `IAsyncAction`, `IAsyncOperation<T>`, `future<T>` or an awaitable that implements `await_resume` member function (or has a free function `await_resume`).
+Every input parameter must be of an awaitable type. If all input tasks produce `void`, `when_all` also produces `void`, otherwise, it produces an `std::tuple<>` of all input parameter types. For `void` tasks, an empty type `corsl::no_result` is used in the tuple.
 
-If all input tasks produce `void`, `when_all` also produces `void`, otherwise, it produces an `std::tuple<>` of all input parameter types. For `void` tasks, an empty type `corsl::no_result` is used in the tuple.
-
-When the list of tasks to await is not known at compile time, `when_all_range` function must be used instead. It takes a pair of iterators to a range of tasks. In this case, all tasks must be of the same type. `when_all_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies task objects during its execution.
-
-Since `future` class is not copyable, it must be moved to the `when_all_range` instead of copying or passing by reference. `std::make_move_iterator` function may be used for that.
+When the list of tasks to await is not known at compile time, `when_all_range` function must be used instead. It takes a range of awaitables and all of them must produce the same type. `when_all_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies or moves task objects during its execution.
 
 ```C++
 corsl::future<void> void_timer(TimeSpan duration)
@@ -366,15 +447,11 @@ corsl::future<void> coroutine6()
 
 `when_any` function accepts any number of awaitables and produces an awaitable that is completed when at least one of the input tasks is completed. If the first completed task throws, the thrown exception is rethrown by `when_any`.
 
-All input parameters must be `IAsyncAction`, `IAsyncOperation<T>`, `future<T>` or an awaitable type that implements `await_resume` member function (or has a free function `await_resume`) and **must all be of the same type**.
+All input parameters must be of an awaitable type. If all input tasks produce void, `when_any` produces a `size_t` with an index of first completed task. If not all input tasks produce the same type `T`, `when_any` produces a `std::pair<size_t, T>`. If input tasks produce different types, `when_any` produces `std::pair<size_t, std::variant<unique_subset_of_types>>`.
 
 `when_any` **does not cancel any non-completed tasks.** When other tasks complete, their results are silently discarded. `when_any` makes sure the control block does not get destroyed until all tasks complete.
 
-If all input tasks produce no result, `when_any` produces the index to the first completed task. Otherwise, it produces `std::pair<T, size_t>`, where the first result is the result of completed task and second is an index of completed task.
-
-When the list of tasks to await is not known at compile time, `when_any_range` function must be used instead. It takes a pair of iterators to a range of tasks. `when_any_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies task objects during its execution.
-
-Since `future` class is not copyable, it must be moved to the `when_any_range` instead of copying or passing by reference. `std::make_move_iterator` function may be used for that.
+When the list of tasks to await is not known at compile time, `when_any_range` function must be used instead. It takes a range of awaitables. `when_any_range` guarantees to traverse the range only once, thus supporting input iterators (or better). Note, that it copies (or moves) task objects during its execution.
 
 ```C++
 corsl::future<void> coroutine7()
@@ -393,7 +470,7 @@ corsl::future<void> coroutine7()
 #include <corsl/async_queue.h>
 ```
 
-`async_queue<T>` is an awaitable producer-consumer queue. Producer adds values to the queue by calling non-blocking `push` or `emplace` methods while consumer calls `next` method to get an awaitable that produces the result from the head of a queue.
+`async_queue<T>` is an awaitable producer-consumer queue. Producer adds values to the queue by calling non-blocking `push`, `emplace` or `push_exception` methods while consumer calls `next` method to get an awaitable that produces the result from the head of a queue.
 
 `cancel` method cancels the queue. The next (or current) continuation is immediately cancelled by getting `operation_cancelled` exception. Any subsequent `push` calls will be ignored.
 
@@ -429,6 +506,10 @@ corsl::future<void> test_async_queue_consumer()
 	} while (value != 42);
 }
 ```
+
+### `async_multi_consumer_queue` Class
+
+This class has the same interface as `async_queue` class described above, but allows several number of consumers to get elements from the queue.
 
 ### Cancellation Support
 

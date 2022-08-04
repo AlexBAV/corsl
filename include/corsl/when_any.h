@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // corsl - Coroutine Support Library
-// Copyright (C) 2017 HHD Software Ltd.
+// Copyright (C) 2017 - 2022 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -9,11 +9,6 @@
 #pragma once
 
 #include "impl/when_all_when_any_base.h"
-
-#include <variant>
-
-#include <boost/mp11/list.hpp>
-#include <boost/mp11/algorithm.hpp>
 
 namespace corsl
 {
@@ -32,8 +27,7 @@ namespace corsl
 
 			void finished_exception() noexcept
 			{
-				auto continuation = resume.exchange(nullptr, std::memory_order_relaxed);
-				if (continuation)
+				if (auto continuation = resume.exchange(nullptr, std::memory_order_relaxed))
 				{
 					exception = std::current_exception();
 					continuation();
@@ -42,8 +36,7 @@ namespace corsl
 
 			void finished(size_t index_) noexcept
 			{
-				auto continuation = resume.exchange(nullptr, std::memory_order_relaxed);
-				if (continuation)
+				if (auto continuation = resume.exchange(nullptr, std::memory_order_relaxed))
 				{
 					index = index_;
 					continuation();
@@ -53,8 +46,7 @@ namespace corsl
 			template<class V>
 			void finished(V &&result_, size_t index_) noexcept
 			{
-				auto continuation = resume.exchange(nullptr, std::memory_order_relaxed);
-				if (continuation)
+				if (auto continuation = resume.exchange(nullptr, std::memory_order_relaxed))
 				{
 					result = std::forward<V>(result_);
 					index = index_;
@@ -68,7 +60,7 @@ namespace corsl
 		{
 			try
 			{
-				if constexpr (std::same_as<result_type<void>, decltype(get_result_type(task))>)
+				if constexpr (std::same_as<result_type<void>, get_result_type_t<Awaitable>>)
 				{
 					co_await task;
 					master->finished(index);
@@ -147,144 +139,101 @@ namespace corsl
 			return when_any_awaitable<Result, Awaitables...>{ std::forward<Awaitables>(awaitables)... };
 		}
 
+		template<class T>
+		using safe_invoke_result = std::conditional_t<std::same_as<T, result_type<void>>, no_result, invoke_result<T>>;
+
 		template<class...Awaitables>
 		inline auto when_any(Awaitables &&...awaitables)
 		{
 			static_assert(sizeof...(Awaitables) >= 2, "when_any must be passed at least two arguments");
 
 			using namespace boost::mp11;
-			using result_types = mp_list<decltype(get_result_type(awaitables))...>;
+			using result_types = mp_list<get_result_type_t<Awaitables>...>;
 
 			if constexpr (mp_apply<mp_same, result_types>{})
 			{
 				if constexpr(std::same_as<void, invoke_result<mp_first<result_types>>>)
-					return when_any_impl<mp_first<result_types>>(std::forward<Awaitables>(awaitables)...);
+					return when_any_impl<no_result>(std::forward<Awaitables>(awaitables)...);
 				else
-					return when_any_impl<invoke_result<mp_first<result_types>>>(std::forward<Awaitables>(awaitables)...);
+					return when_any_impl<safe_invoke_result<mp_first<result_types>>>(std::forward<Awaitables>(awaitables)...);
 			}
 			else
 			{
-				using filtered_types = mp_transform<
-					invoke_result,
-					mp_unique<mp_remove<result_types, result_type<void>>>
-				>;
+				using filtered_types = mp_transform<invoke_result, mp_unique<mp_remove<result_types, result_type<void>>>>;
 				using value_type = std::conditional_t<mp_size<filtered_types>::value == 1, mp_first<filtered_types>, mp_apply<std::variant, filtered_types>>;
 				return when_any_impl<value_type>(std::forward<Awaitables>(awaitables)...);
 			}
 		}
 
 		// range
-		// void case
-		using when_any_block_void = when_any_block<result_type<void>>;
-
-		template<class Awaitable>
-		inline fire_and_forget<> range_when_any_helper_single(std::shared_ptr<when_any_block_void> master, Awaitable task, size_t index) noexcept
+		template<class Result, class Awaitable>
+		struct when_any_awaitable_range
 		{
-			try
+			static constexpr const bool is_void = std::same_as<Result, result_type<void>>;
+			static constexpr const bool is_copyable = std::copyable<Awaitable>;
+			using when_any_block = when_any_block<safe_invoke_result<Result>>;
+			using T = invoke_result<Result>;
+
+			std::shared_ptr<when_any_block> ptr{ std::make_shared<when_any_block>() };
+			std::vector<Awaitable> awaitables;
+
+			template<class Range>
+			when_any_awaitable_range(Range &&range) requires !is_copyable :
+				awaitables{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) }
 			{
-				co_await task;
-				master->finished(index);
 			}
-			catch (...)
+
+			template<class Range>
+			when_any_awaitable_range(Range &&range) requires is_copyable :
+				awaitables{ sr::begin(range), sr::end(range) }
 			{
-				master->finished_exception();
 			}
-		}
 
-		template<sr::range Range>
-		inline auto range_when_any_impl(result_type<void>, Range &&range)
-		{
-			struct when_any_awaitable
+			bool await_ready() const noexcept
 			{
-				using value_type = std::decay_t<sr::range_value_t<Range>>;
+				return awaitables.empty();
+			}
 
-				std::shared_ptr<when_any_block_void> ptr;
-				std::vector<value_type> awaitables;
-
-				when_any_awaitable(Range &&range) :
-					awaitables{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
-					ptr{ std::make_shared<when_any_block_void>() }
-				{
-				}
-
-				bool await_ready() const noexcept
-				{
-					return awaitables.empty();
-				}
-
-				void await_suspend(std::coroutine_handle<> handle)
-				{
-					ptr->resume.store(handle, std::memory_order_relaxed);
-					std::vector<std::shared_ptr<when_any_block_void>> references(awaitables.size(), ptr);
-
-					auto awaitables_local_copy = std::move(awaitables);
-					for (size_t i = 0; i < references.size(); ++i)
-					{
-						range_when_any_helper_single(std::move(references[i]), std::move(awaitables_local_copy[i]), i);
-					}
-				}
-
-				size_t await_resume() const
-				{
-					if (ptr->exception)
-						std::rethrow_exception(ptr->exception);
-					else
-						return ptr->index;
-				}
-			};
-
-			return when_any_awaitable{ std::move(range) };
-		}
-
-		//non-void case
-		template<class T, sr::range Range>
-		inline auto range_when_any_impl(result_type<T>, Range &&range)
-		{
-			using task_type = sr::range_value_t<Range>;
-			using value_type = std::decay_t<T>;
-			struct when_any_awaitable
+			void await_suspend(std::coroutine_handle<> handle)
 			{
-				std::shared_ptr<when_any_block<value_type>> ptr;
-				std::vector<task_type> tasks;
+				ptr->resume.store(handle, std::memory_order_relaxed);
+				std::vector<std::shared_ptr<when_any_block>> references(awaitables.size(), ptr);
 
-				when_any_awaitable(Range &&range) noexcept :
-					tasks{ std::make_move_iterator(sr::begin(range)), std::make_move_iterator(sr::end(range)) },
-					ptr{ std::make_shared<when_any_block<value_type>>() }
-				{}
+				auto awaitables_local_copy = std::move(awaitables);
+				for (size_t i = 0; i < references.size(); ++i)
+					when_any_helper_single(std::move(references[i]), std::move(awaitables_local_copy[i]), i);
+			}
 
-				bool await_ready() const noexcept
-				{
-					return tasks.empty();
-				}
+			size_t await_resume() const requires is_void
+			{
+				if (ptr->exception)
+					std::rethrow_exception(ptr->exception);
+				else
+					return ptr->index;
+			}
 
-				void await_suspend(std::coroutine_handle<> handle)
-				{
-					ptr->resume.store(handle, std::memory_order_relaxed);
-					std::vector<std::shared_ptr<when_any_block<value_type>>> references(tasks.size(), ptr);
+			std::pair<T, size_t> await_resume() const requires !is_void
+			{
+				if (ptr->exception)
+					std::rethrow_exception(ptr->exception);
+				else
+					return std::pair { std::move(ptr->result), ptr->index };
+			}
+		};
 
-					auto tasks_copy = std::move(tasks);
-					for (size_t i = 0; i < tasks_copy.size(); ++i)
-						when_any_helper_single_value(std::move(references[i]), std::move(tasks_copy[i]), i);
-				}
-
-				std::pair<T, size_t> await_resume() const
-				{
-					if (ptr->exception)
-						std::rethrow_exception(ptr->exception);
-					else
-						return { std::move(ptr->result), ptr->index };
-				}
-			};
-
-			return when_any_awaitable{ std::move(range) };
+		template<typename Result, sr::range Range>
+		inline auto range_when_any_impl(Result, Range &&range)
+		{
+			return when_any_awaitable_range<Result, sr::range_value_t<Range>>{ std::forward<Range>(range) };
 		}
+
 
 		//
 		template<sr::range Range>
 		inline auto when_any_range(Range &&range)
 		{
-			constexpr auto type = get_result_type(*sr::begin(range));
-			return range_when_any_impl(type, std::move(range));
+			using future_type = sr::range_value_t<Range>;
+			return range_when_any_impl(get_result_type_t<future_type>{}, std::move(range));
 		}
 	}
 

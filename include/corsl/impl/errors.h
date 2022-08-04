@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // corsl - Coroutine Support Library
-// Copyright (C) 2017 HHD Software Ltd.
+// Copyright (C) 2017 - 2022 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -8,13 +8,13 @@
 
 #pragma once
 
-#include "impl/dependencies.h"
-#include <boost/algorithm/string/trim_all.hpp>
+#include "dependencies.h"
 
 namespace corsl
 {
 	namespace details
 	{
+		using namespace std::literals;
 		// Simplified version of cppwinrt's hresult_error
 		// May be used on Vista+
 		class hresult_error
@@ -51,9 +51,12 @@ namespace corsl
 					0,
 					nullptr);
 
-				std::wstring error{ message.get(), size };
-				boost::trim_all(error);
-				return error;
+				std::wstring_view error{ message.get(), size };
+				if (auto pos = error.find_first_not_of(L" \t"sv); pos != std::wstring_view::npos)
+					error.remove_prefix(pos);
+				if (auto pos = error.find_last_not_of(L" \t"sv); pos != std::wstring_view::npos)
+					error.remove_suffix(error.size() - pos - 1);
+				return std::wstring{ error };
 			}
 		};
 

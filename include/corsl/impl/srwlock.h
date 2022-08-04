@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // corsl - Coroutine Support Library
-// Copyright (C) 2017 HHD Software Ltd.
+// Copyright (C) 2017 - 2022 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -15,8 +15,6 @@ namespace corsl
 	namespace details
 	{
 		// Windows SRW lock wrapped in shared_mutex-friendly class
-		// While cppwinrt provides one, it does not follow shared_mutex interface and cannot
-		// be used with STL std::lock_guard and std::unique_lock
 		class srwlock
 		{
 			SRWLOCK m_lock{};
@@ -64,7 +62,7 @@ namespace corsl
 		class condition_variable
 		{
 			CONDITION_VARIABLE m_cv{};
-		
+
 		public:
 			condition_variable(condition_variable const &) = delete;
 			condition_variable const & operator=(condition_variable const &) = delete;

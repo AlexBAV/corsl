@@ -45,7 +45,7 @@ corsl::future<int> int_timer(winrt::Windows::Foundation::TimeSpan duration)
 corsl::future<void> test_when_all_void()
 {
 	// Test when_all with awaitables
-	co_await corsl::when_all(std::experimental::suspend_never{}, std::experimental::suspend_never{});
+	co_await corsl::when_all(std::suspend_never{}, std::suspend_never{});
 
 	// Test when_all with future
 	co_await corsl::when_all(void_timer(first_timer_duration), void_timer(second_timer_duration));
@@ -53,17 +53,15 @@ corsl::future<void> test_when_all_void()
 
 corsl::future<void> test_when_all_void_range()
 {
-	std::vector<std::experimental::suspend_never> tasks1(2);
+	std::vector<std::suspend_never> tasks1(2);
 
-	co_await corsl::when_all_range(tasks1.begin(), tasks1.end());
+	co_await corsl::when_all_range(tasks1);
 
 	std::vector<corsl::future<void>> tasks2;
 	tasks2.emplace_back(void_timer(first_timer_duration));
 	tasks2.emplace_back(void_timer(second_timer_duration));
 
-	co_await corsl::when_all_range(
-		std::make_move_iterator(tasks2.begin()),
-		std::make_move_iterator(tasks2.end()));
+	co_await corsl::when_all_range(std::move(tasks2));
 }
 
 corsl::future<void> test_when_all_bool_range()
@@ -72,24 +70,20 @@ corsl::future<void> test_when_all_bool_range()
 	tasks2.emplace_back(bool_timer(first_timer_duration));
 	tasks2.emplace_back(bool_timer(second_timer_duration));
 
-	auto result = co_await corsl::when_all_range(
-		std::make_move_iterator(tasks2.begin()), 
-		std::make_move_iterator(tasks2.end()));
+	auto result = co_await corsl::when_all_range(std::move(tasks2));
 }
 
 corsl::future<void> test_when_any_void_range()
 {
-	std::vector<std::experimental::suspend_never> tasks1(2);
+	std::vector<std::suspend_never> tasks1(2);
 
-	co_await corsl::when_any_range(tasks1.begin(), tasks1.end());
+	co_await corsl::when_any_range(std::move(tasks1));
 
 	std::vector<corsl::future<void>> tasks2;
 	tasks2.emplace_back(void_timer(first_timer_duration));
 	tasks2.emplace_back(void_timer(second_timer_duration));
 
-	co_await corsl::when_any_range(
-		std::make_move_iterator(tasks2.begin()),
-		std::make_move_iterator(tasks2.end()));
+	co_await corsl::when_any_range(std::move(tasks2));
 }
 
 corsl::future<void> test_when_any_bool_range()
@@ -98,9 +92,7 @@ corsl::future<void> test_when_any_bool_range()
 	tasks2.emplace_back(bool_timer(first_timer_duration));
 	tasks2.emplace_back(bool_timer(second_timer_duration));
 
-	auto result = co_await corsl::when_any_range(
-		std::make_move_iterator(tasks2.begin()),
-		std::make_move_iterator(tasks2.end()));
+	auto result = co_await corsl::when_any_range(std::move(tasks2));
 }
 
 corsl::future<void> test_when_all_mixed()
@@ -109,18 +101,20 @@ corsl::future<void> test_when_all_mixed()
 	std::tuple<bool, int, corsl::no_result> result2 = co_await corsl::when_all(bool_timer(first_timer_duration), int_timer(second_timer_duration), corsl::resume_after{ third_timer_duration });
 }
 
+static_assert(std::same_as<corsl::details::result_type<bool>, corsl::details::get_result_type_t<corsl::future<bool>>>);
+
 corsl::future<void> test_when_all_bool()
 {
 	// Test when_all with IAsyncOperation<T>
-	std::promise<bool> promise;
-	promise.set_value(true);
+	corsl::promise<bool> promise;
+	promise.set(true);
 	co_await corsl::when_all(bool_timer(first_timer_duration), bool_timer(second_timer_duration), promise.get_future());
 }
 
 corsl::future<void> test_when_any_void()
 {
 	// Test when_any with awaitables
-	co_await corsl::when_any(std::experimental::suspend_never{}, std::experimental::suspend_never{});
+	co_await corsl::when_any(std::suspend_never{}, std::suspend_never{});
 
 	auto timer1 = void_timer(first_timer_duration);
 	// Test when_any with IAsyncAction

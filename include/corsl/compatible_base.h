@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // corsl - Coroutine Support Library
-// Copyright (C) 2017 HHD Software Ltd.
+// Copyright (C) 2017 - 2022 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -21,7 +21,7 @@ namespace corsl
 		// which allows them to be used in Vista+
 
 		template<typename T>
-		T* check_pointer(T* pointer)
+		inline T* check_pointer(T* pointer)
 		{
 			if (!pointer)
 				throw_last_error();
@@ -213,7 +213,7 @@ namespace corsl
 		struct resume_on_signal
 		{
 			explicit resume_on_signal(HANDLE handle) noexcept :
-			m_handle(handle)
+				m_handle(handle)
 			{}
 
 			resume_on_signal(HANDLE handle, winrt::Windows::Foundation::TimeSpan timeout) noexcept :
@@ -500,12 +500,12 @@ namespace corsl
 				release_mutex_when_callback_returns(mutex.get());
 			}
 
-			void release_semaphore_when_callback_returns(HANDLE semaphore, DWORD crel) const noexcept
+			void release_semaphore_when_callback_returns(HANDLE semaphore, uint32_t crel) const noexcept
 			{
 				ReleaseSemaphoreWhenCallbackReturns(pci, semaphore, crel);
 			}
 
-			void release_semaphore_when_callback_returns(const winrt::handle &semaphore, DWORD crel) const noexcept
+			void release_semaphore_when_callback_returns(const winrt::handle &semaphore, uint32_t crel) const noexcept
 			{
 				release_semaphore_when_callback_returns(semaphore.get(), crel);
 			}
