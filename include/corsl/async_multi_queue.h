@@ -42,7 +42,7 @@ namespace corsl
 			bool is_ready(std::variant<std::monostate, std::exception_ptr, T> &value)
 			{
 				std::scoped_lock l{ queue_lock };
-				if (exception)
+				if (exception) [[unlikely]]
 				{
 					value = exception;
 					return true;
@@ -59,7 +59,7 @@ namespace corsl
 			bool set_awaitable(awaitable *pointer)
 			{
 				std::scoped_lock l{ queue_lock };
-				if (exception)
+				if (exception) [[unlikely]]
 					std::rethrow_exception(exception);
 				if (!queue.empty())
 				{
@@ -125,7 +125,7 @@ namespace corsl
 			void push(V &&item)
 			{
 				std::unique_lock l{ queue_lock };
-				if (!exception)
+				if (!exception) [[likely]]
 					drain(std::move(l), T{ std::forward<V>(item) });
 			}
 
@@ -133,7 +133,7 @@ namespace corsl
 			void emplace(Args &&...args)
 			{
 				std::unique_lock l{ queue_lock };
-				if (!exception)
+				if (!exception) [[likely]]
 					drain(std::move(l), T{ std::forward<Args>(args)... });
 			}
 

@@ -68,7 +68,7 @@ namespace corsl
 
 			void check_exception()
 			{
-				if (std::holds_alternative<std::exception_ptr>(value))
+				if (std::holds_alternative<std::exception_ptr>(value)) [[unlikely]]
 					std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
 			}
 
@@ -216,7 +216,7 @@ namespace corsl
 			template<class T>
 			T &&await_transform(T &&expr)
 			{
-				if (this->is_cancelled())
+				if (this->is_cancelled()) [[unlikely]]
 					throw operation_cancelled{};
 				else
 					return std::forward<T>(expr);

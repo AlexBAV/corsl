@@ -89,13 +89,13 @@ namespace corsl
 
 		inline void check_hresult(HRESULT error)
 		{
-			if (FAILED(error))
+			if (FAILED(error)) [[unlikely]]
 				throw_error(error);
 		}
 
 		inline void check_win32(DWORD error)
 		{
-			if (error)
+			if (error) [[unlikely]]
 				throw hresult_error{ HRESULT_FROM_WIN32(error) };
 		}
 
@@ -104,14 +104,14 @@ namespace corsl
 			if (!result)
 			{
 				auto err = GetLastError();
-				if (err != ERROR_IO_PENDING)
+				if (err != ERROR_IO_PENDING) [[unlikely]]
 					throw hresult_error{ HRESULT_FROM_WIN32(err) };
 			}
 		}
 
 		inline void check_win32_api(BOOL res)
 		{
-			if (!res)
+			if (!res) [[unlikely]]
 				throw hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
 		}
 

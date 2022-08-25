@@ -47,7 +47,7 @@ namespace corsl
 
 			void check_cancellation(std::unique_lock<srwlock> &l)
 			{
-				if (cancellation_requested)
+				if (cancellation_requested) [[unlikely]]
 				{
 					cancellation_requested = false;
 					l.unlock();
@@ -58,7 +58,7 @@ namespace corsl
 			void check_exception()
 			{
 				lock.lock();
-				if (cancellation_requested)
+				if (cancellation_requested) [[unlikely]]
 				{
 					cancellation_requested = false;
 					lock.unlock();

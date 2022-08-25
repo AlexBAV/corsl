@@ -23,7 +23,7 @@ namespace corsl
 		template<typename T>
 		inline T* check_pointer(T* pointer)
 		{
-			if (!pointer)
+			if (!pointer) [[unlikely]]
 				throw_last_error();
 
 			return pointer;
@@ -71,7 +71,7 @@ namespace corsl
 					std::coroutine_handle<>::from_address(context)();
 				};
 
-				if (!TrySubmitThreadpoolCallback(callback, handle.address(), nullptr))
+				if (!TrySubmitThreadpoolCallback(callback, handle.address(), nullptr)) [[unlikely]]
 					throw_last_error();
 			}
 		};
@@ -96,7 +96,7 @@ namespace corsl
 					std::coroutine_handle<>::from_address(context)();
 				};
 
-				if (!TrySubmitThreadpoolCallback(callback, handle.address(), env))
+				if (!TrySubmitThreadpoolCallback(callback, handle.address(), env)) [[unlikely]]
 					throw_last_error();
 			}
 		};
@@ -423,7 +423,7 @@ namespace corsl
 			{
 				CallbackPolicy::init_callback(pci);
 				std::coroutine_handle<>::from_address(context)();
-			}, handle.address(), env))
+			}, handle.address(), env)) [[unlikely]]
 			{
 				throw_last_error();
 			}

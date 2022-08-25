@@ -142,7 +142,7 @@ namespace corsl
 
 			void check_cancelled() const
 			{
-				if (is_cancelled())
+				if (is_cancelled()) [[unlikely]]
 					throw operation_cancelled{};
 			}
 

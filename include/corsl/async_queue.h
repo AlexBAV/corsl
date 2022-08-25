@@ -61,7 +61,7 @@ namespace corsl
 			T await_resume()
 			{
 				assert(value.index() != 0 && "broken invariant");
-				if (value.index() == 1)
+				if (value.index() == 1) [[unlikely]]
 					std::rethrow_exception(std::get<std::exception_ptr>(std::move(value)));
 				else
 					return std::get<T>(std::move(value));
@@ -83,7 +83,7 @@ namespace corsl
 			bool is_ready(std::variant<std::monostate, std::exception_ptr, T> &value) noexcept
 			{
 				std::scoped_lock l{ queue_lock };
-				if (exception)
+				if (exception) [[unlikely]]
 				{
 					value = exception;
 					return true;
@@ -100,7 +100,7 @@ namespace corsl
 			bool set_awaitable(awaitable *pointer)
 			{
 				std::scoped_lock l{ queue_lock };
-				if (exception)
+				if (exception) [[unlikely]]
 					std::rethrow_exception(exception);
 				if (!queue.empty())
 				{
@@ -118,7 +118,7 @@ namespace corsl
 				if (current)
 				{
 					auto cur = std::exchange(current, nullptr);
-					if (exception)
+					if (exception) [[unlikely]]
 						cur->set_exception(exception);
 					else
 					{
@@ -146,7 +146,7 @@ namespace corsl
 			size_t push(V &&item)
 			{
 				std::unique_lock l{ queue_lock };
-				if (!exception)
+				if (!exception) [[likely]]
 					queue.emplace(std::forward<V>(item));
 				auto retval = queue.size();
 				drain(std::move(l));
@@ -157,7 +157,7 @@ namespace corsl
 			size_t emplace(Args &&...args)
 			{
 				std::unique_lock l{ queue_lock };
-				if (!exception)
+				if (!exception) [[likely]]
 					queue.emplace(std::forward<Args>(args)...);
 				auto retval = queue.size();
 				drain(std::move(l));
