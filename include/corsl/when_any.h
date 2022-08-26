@@ -87,7 +87,7 @@ namespace corsl
 		{
 			using any_block_t = when_any_block<Result>;
 			static constexpr size_t N = sizeof...(Awaitables);
-			static constexpr bool is_void = std::same_as<Result, result_type<void>>;
+			static constexpr bool is_void = std::same_as<Result, no_result>;
 
 			std::shared_ptr<any_block_t> ptr{ std::make_shared<any_block_t>() };
 			std::tuple<std::decay_t<Awaitables>...> awaitables;
