@@ -52,9 +52,9 @@ namespace corsl
 					nullptr);
 
 				std::wstring_view error{ message.get(), size };
-				if (auto pos = error.find_first_not_of(L" \t"sv); pos != std::wstring_view::npos)
+				if (auto pos = error.find_first_not_of(L" \t\r\n"sv); pos != std::wstring_view::npos)
 					error.remove_prefix(pos);
-				if (auto pos = error.find_last_not_of(L" \t"sv); pos != std::wstring_view::npos)
+				if (auto pos = error.find_last_not_of(L" \t\r\n"sv); pos != std::wstring_view::npos)
 					error.remove_suffix(error.size() - pos - 1);
 				return std::wstring{ error };
 			}
