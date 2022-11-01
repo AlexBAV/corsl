@@ -223,9 +223,13 @@ namespace corsl
 
 			void cancel()
 			{
+				assert(m_wait);
+				SetThreadpoolWait(m_wait.get(), {}, nullptr);
+				WaitForThreadpoolWaitCallbacks(m_wait.get(), true);
 				m_wait.close();
-				m_result = WAIT_TIMEOUT;
-				m_resume();
+				m_result = WAIT_FAILED;
+				if (auto resume = m_resume.exchange(nullptr, std::memory_order_release))
+					resume();
 			}
 
 			bool await_ready() const noexcept
@@ -235,25 +239,28 @@ namespace corsl
 
 			void await_suspend(std::coroutine_handle<> resume)
 			{
-				m_resume = resume;
+				this->m_resume.store(resume, std::memory_order_relaxed);
 				m_wait.attach(check_pointer(CreateThreadpoolWait(callback, this, nullptr)));
 				int64_t relative_count = -m_timeout.count();
 				PFILETIME file_time = relative_count != 0 ? reinterpret_cast<PFILETIME>(&relative_count) : nullptr;
 				SetThreadpoolWait(m_wait.get(), m_handle, file_time);
 			}
 
-			bool await_resume() const noexcept
+			bool await_resume() const
 			{
-				return m_result == WAIT_OBJECT_0;
+				if (m_result == WAIT_FAILED) [[unlikely]]
+					throw operation_cancelled{};
+				else
+					return m_result == WAIT_OBJECT_0;
 			}
 
 		private:
-
 			static void __stdcall callback(PTP_CALLBACK_INSTANCE, void * context, PTP_WAIT, TP_WAIT_RESULT result) noexcept
 			{
 				auto that = static_cast<resume_on_signal *>(context);
 				that->m_result = result;
-				that->m_resume();
+				if (auto resume = that->m_resume.exchange(nullptr, std::memory_order_release))
+					resume();
 			}
 
 			struct wait_traits
@@ -275,7 +282,7 @@ namespace corsl
 			winrt::Windows::Foundation::TimeSpan m_timeout{ 0 };
 			HANDLE m_handle{};
 			uint32_t m_result{};
-			std::coroutine_handle<> m_resume{ nullptr };
+			std::atomic<std::coroutine_handle<>> m_resume{ nullptr };
 		};
 
 		template<class CallbackPolicy>
@@ -290,7 +297,6 @@ namespace corsl
 			}
 
 		protected:
-
 			OVERLAPPED m_overlapped{};
 			uint32_t m_result{};
 			std::coroutine_handle<> m_resume{ nullptr };
