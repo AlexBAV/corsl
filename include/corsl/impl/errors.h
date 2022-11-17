@@ -99,14 +99,17 @@ namespace corsl
 				throw hresult_error{ HRESULT_FROM_WIN32(error) };
 		}
 
-		inline void check_io(BOOL result)
+		// returns false if pending, true if successful and throws on error
+		inline bool check_io(BOOL result)
 		{
 			if (!result)
 			{
 				auto err = GetLastError();
 				if (err != ERROR_IO_PENDING) [[unlikely]]
 					throw hresult_error{ HRESULT_FROM_WIN32(err) };
+				return false;
 			}
+			return true;
 		}
 
 		inline void check_win32_api(BOOL res)
