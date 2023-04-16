@@ -213,13 +213,13 @@ namespace corsl
 				}
 			}
 
-			template<class T>
-			T &&await_transform(T &&expr)
+			template<class V>
+			V &&await_transform(V &&expr)
 			{
 				if (this->is_cancelled()) [[unlikely]]
 					throw operation_cancelled{};
 				else
-					return std::forward<T>(expr);
+					return std::forward<V>(expr);
 			}
 
 			corsl::details::cancellation_token_transport await_transform(corsl::details::cancellation_source &source) noexcept
