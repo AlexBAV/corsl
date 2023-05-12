@@ -133,16 +133,27 @@ namespace corsl
 				resume(true);
 			}
 
-			void start(winrt::Windows::Foundation::TimeSpan duration, winrt::Windows::Foundation::TimeSpan period = {}) noexcept
+			void stop() noexcept
+			{
+				SetThreadpoolTimer(timer.get(), nullptr, 0, 0);
+			}
+
+			void start(winrt::Windows::Foundation::TimeSpan duration, winrt::Windows::Foundation::TimeSpan period = {}) const noexcept
 			{
 				int64_t relative_count = -duration.count();
 				SetThreadpoolTimer(timer.get(), reinterpret_cast<PFILETIME>(&relative_count), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(period).count()), 0);
 			}
 
-			void start(winrt::Windows::Foundation::DateTime when, winrt::Windows::Foundation::TimeSpan period = {}) noexcept
+			void start(winrt::Windows::Foundation::DateTime when, winrt::Windows::Foundation::TimeSpan period = {}) const noexcept
 			{
 				int64_t relative_count = when.time_since_epoch().count();
 				SetThreadpoolTimer(timer.get(), reinterpret_cast<PFILETIME>(&relative_count), static_cast<DWORD>(std::chrono::duration_cast<std::chrono::milliseconds>(period).count()), 0);
+			}
+
+			void start_indefinite() const noexcept
+			{
+				FILETIME ft{ -1,-1 };
+				SetThreadpoolTimer(timer.get(),&ft, 0, 0);
 			}
 		};
 	}
