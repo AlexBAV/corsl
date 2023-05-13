@@ -29,6 +29,11 @@ namespace corsl
 			{
 			}
 
+			static hresult_error last_error() noexcept
+			{
+				return hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
+			}
+
 			constexpr HRESULT code() const noexcept
 			{
 				return m_code;
@@ -112,6 +117,11 @@ namespace corsl
 			return true;
 		}
 
+		inline auto last_error() noexcept
+		{
+			return hresult_error::last_error();
+		}
+
 		inline void check_win32_api(BOOL res)
 		{
 			if (!res) [[unlikely]]
@@ -134,4 +144,5 @@ namespace corsl
 	using details::check_win32;
 	using details::check_io;
 	using details::check_win32_api;
+	using details::last_error;
 }
