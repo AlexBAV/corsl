@@ -46,9 +46,10 @@ namespace corsl
 
 			void internal_set_exception(std::exception_ptr &&exception) noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				//std::unique_lock<srwlock> l{ lock };
+				lock.lock();	// will be released in final_suspend
 				value = std::move(exception);
-				check_resume(std::move(l));
+				//check_resume(std::move(l));
 			}
 
 			fire_and_forget<> internal_set_exception_async(std::exception_ptr &&exception) noexcept
@@ -61,9 +62,10 @@ namespace corsl
 
 			void unhandled_exception() noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				//std::unique_lock<srwlock> l{ lock };
+				lock.lock();	// will be released in final_suspend
 				value = std::current_exception();
-				check_resume(std::move(l));
+				//check_resume(std::move(l));
 			}
 
 			void check_exception()
@@ -86,9 +88,10 @@ namespace corsl
 			template<class V>
 			void return_value(V &&v) noexcept
 			{
-				std::unique_lock l{ this->lock };
+				//std::unique_lock l{ this->lock };
+				this->lock.lock();	// will be released in final_suspend
 				this->value = std::forward<V>(v);
-				this->check_resume(std::move(l));
+				//this->check_resume(std::move(l));
 			}
 
 			future<> return_value_async(T v) noexcept;
@@ -101,9 +104,9 @@ namespace corsl
 		{
 			void return_void() noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				lock.lock();	// will be released in final_suspend::await_ready
 				value = empty_type{};
-				check_resume(std::move(l));
+				//check_resume(std::move(l));
 			}
 
 			future<> return_void_async() noexcept;
@@ -161,18 +164,25 @@ namespace corsl
 
 				bool await_ready() const noexcept
 				{
-					pthis->lock.lock();
+					//assert(pthis->lock.owns_lock());// lock();
 					auto is_ready = !pthis->future_exists;
 					if (is_ready)
+					{
+						auto resume = std::exchange(pthis->resume, {});
 						pthis->lock.unlock();
+						if (resume)
+							resume();
+					}
 					return is_ready;
 				}
 
-				void await_suspend(std::coroutine_handle<> resume_) noexcept
+				auto await_suspend(std::coroutine_handle<> resume_) noexcept
 				{
 					pthis->destroy_resume = resume_;
 #pragma warning(suppress: 26110)
+					auto result = std::exchange(pthis->resume, {});
 					pthis->lock.unlock();
+					return result ? result : std::noop_coroutine();
 				}
 
 				static void await_resume() noexcept
