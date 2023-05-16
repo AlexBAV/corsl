@@ -17,6 +17,32 @@ namespace corsl
 		using namespace std::literals;
 		// Simplified version of cppwinrt's hresult_error
 		// May be used on Vista+
+
+		// The following code is copied from belt/utility/charconv
+		template<class Char>
+		inline std::basic_string<Char> w_to_utf(std::wstring_view v, unsigned cp = CP_UTF8)
+		{
+			const auto resulting_size = WideCharToMultiByte(cp, 0, v.data(), static_cast<int>(v.size()), nullptr, 0, nullptr, nullptr);
+			std::basic_string<Char> result;
+			result.resize_and_overwrite(resulting_size, [&](Char *dest, size_t size)
+				{
+					WideCharToMultiByte(cp, 0, v.data(), static_cast<int>(v.size()), 
+					reinterpret_cast<char *>(dest), resulting_size, nullptr, nullptr);
+					return size;
+				});
+			return result;
+		}
+
+		inline std::string w_to_utf8(std::wstring_view v, unsigned cp = CP_UTF8)
+		{
+			return w_to_utf<char>(v, cp);
+		}
+
+		inline std::u8string w_to_u8(std::wstring_view v, unsigned cp = CP_UTF8)
+		{
+			return w_to_utf<char8_t>(v, cp);
+		}
+
 		class hresult_error
 		{
 			HRESULT m_code{ E_FAIL };
@@ -62,6 +88,16 @@ namespace corsl
 				if (auto pos = error.find_last_not_of(L" \t\r\n"sv); pos != std::wstring_view::npos)
 					error.remove_suffix(error.size() - pos - 1);
 				return std::wstring{ error };
+			}
+
+			std::u8string u8message() const noexcept
+			{
+				return w_to_u8(message());
+			}
+
+			std::string utf8message() const noexcept
+			{
+				return w_to_utf8(message());
 			}
 		};
 
