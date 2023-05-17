@@ -20,17 +20,19 @@ namespace corsl
 			using promise_type = promise_type_<T>;
 			std::shared_ptr<promise_type> promise_{ std::make_shared<promise_type>() };
 
-			template<class A, class V>
-			void iset(V &&v) noexcept requires !std::same_as<void, A>
-			{
-				promise_->return_value(std::forward<V>(v));
-			}
+			// sync set is no longer supported
+			// 
+			//template<class A, class V>
+			//void iset(V &&v) noexcept requires !std::same_as<void, A>
+			//{
+			//	promise_->return_value(std::forward<V>(v));
+			//}
 
-			template<class A>
-			void iset() noexcept requires std::same_as<void, A>
-			{
-				promise_->return_void();
-			}
+			//template<class A>
+			//void iset() noexcept requires std::same_as<void, A>
+			//{
+			//	promise_->return_void();
+			//}
 
 			template<class A, class V>
 			void iset_async(V &&v) noexcept requires !std::same_as<void, A>
@@ -48,7 +50,7 @@ namespace corsl
 
 			void set() noexcept
 			{
-				iset<T>();
+				iset_async<T>();
 			}
 
 			void set_async() noexcept
@@ -59,7 +61,7 @@ namespace corsl
 			template<class V>
 			void set(V &&v) noexcept
 			{
-				iset<T>(std::forward<V>(v));
+				iset_async<T>(std::forward<V>(v));
 			}
 
 			template<class V>
@@ -70,7 +72,7 @@ namespace corsl
 
 			void set_exception(std::exception_ptr &&ex) noexcept
 			{
-				promise_->internal_set_exception(std::move(ex));
+				promise_->internal_set_exception_async(std::move(ex));
 			}
 
 			void set_exception_async(std::exception_ptr &&ex) noexcept
