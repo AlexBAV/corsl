@@ -1,6 +1,6 @@
 //-------------------------------------------------------------------------------------------------------
 // corsl - Coroutine Support Library
-// Copyright (C) 2017 - 2022 HHD Software Ltd.
+// Copyright (C) 2017 - 2023 HHD Software Ltd.
 // Written by Alexander Bessonov
 //
 // Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -9,6 +9,27 @@
 #pragma once
 
 #include "dependencies.h"
+#include <stacktrace>
+
+// optionally define CORSL_NO_SNAPSHOTS to disable snapshot
+
+#if !defined(CORSL_RICH_ERRORS)
+#	if defined(_DEBUG) && !defined(CORSL_NO_SNAPSHOTS)
+#		define CORSL_RICH_ERRORS SNAPSHOT
+#	elif defined(_DEBUG) && defined(CORSL_NO_SNAPSHOTS)
+#		define CORSL_RICH_ERRORS STACKTRACE
+#	else
+#		define CORSL_RICH_ERRORS NONE
+#	endif
+#endif
+
+#if !defined(CORSL_NO_SNAPSHOTS)
+#	include <filesystem>
+#	include <processsnapshot.h>
+#	include <Dbghelp.h>
+
+#	pragma comment(lib,"Dbghelp.lib")
+#endif
 
 namespace corsl
 {
@@ -43,21 +64,188 @@ namespace corsl
 			return w_to_utf<char8_t>(v, cp);
 		}
 
-		class hresult_error
+		template<class Char>
+		inline std::wstring utf_to_w(std::basic_string_view<Char> v, unsigned cp = CP_UTF8)
+		{
+			static_assert(sizeof(Char) == 1, "A string must be either std::string_view or std::u8string_view");
+			const auto resulting_size = MultiByteToWideChar(cp, 0, v.data(), static_cast<int>(v.size()), nullptr, 0);
+			std::wstring result;
+			result.resize_and_overwrite(resulting_size, [&](wchar_t *dest, size_t size)
+				{
+					MultiByteToWideChar(cp, 0, v.data(), static_cast<int>(v.size()), dest, resulting_size);
+					return size;
+				});
+			return result;
+		}
+
+		namespace bases
+		{
+			class __declspec(empty_bases)empty
+			{
+			protected:
+				static std::wstring append_trace(std::wstring_view text)
+				{
+					return std::wstring{text};
+				}
+			};
+
+			class __declspec(empty_bases)stacktrace
+			{
+				std::stacktrace trace{std::stacktrace::current(2)};	// skip this object constructor
+
+			protected:
+				std::wstring append_trace(std::wstring_view message) const
+				{
+					std::wstring result{message};
+					result.append(L"\r\n"sv);
+					for (const auto &entry : trace)
+					{
+						const auto e = std::to_string(entry);
+						result.append(utf_to_w<char>(e));
+						result.append(L"\r\n"sv);
+					}
+					return result;
+				}
+			};
+
+#if !defined(CORSL_NO_SNAPSHOTS)
+			struct unique_process_snapshot
+			{
+				HPSS handle;
+
+				unique_process_snapshot(HPSS handle = nullptr) noexcept :
+					handle{ handle }
+				{}
+
+				~unique_process_snapshot()
+				{
+					close();
+				}
+
+				void close() noexcept
+				{
+					if (auto h = std::exchange(handle, nullptr))
+					{
+						if (PSS_VA_CLONE_INFORMATION pvci; ERROR_SUCCESS == PssQuerySnapshot(h, PSS_QUERY_VA_CLONE_INFORMATION, &pvci, sizeof(pvci)))
+							TerminateProcess(pvci.VaCloneHandle, 0);
+
+						[[maybe_unused]] const auto err = PssFreeSnapshot(GetCurrentProcess(), h);
+						assert(err == ERROR_SUCCESS);
+					}
+				}
+
+				auto get() const noexcept
+				{
+					return handle;
+				}
+
+				unique_process_snapshot(const unique_process_snapshot &o) noexcept
+				{
+					if (o.handle)
+						PssDuplicateSnapshot(GetCurrentProcess(), o.handle, GetCurrentProcess(), &handle, PSS_DUPLICATE_NONE);
+				}
+
+				unique_process_snapshot &operator =(const unique_process_snapshot &o) noexcept
+				{
+					close();
+					if (o.handle)
+						PssDuplicateSnapshot(GetCurrentProcess(), o.handle, GetCurrentProcess(), &handle, PSS_DUPLICATE_NONE);
+					return *this;
+				}
+
+				unique_process_snapshot(unique_process_snapshot &&o) noexcept
+				{
+					if (auto h = std::exchange(o.handle, nullptr))
+						PssDuplicateSnapshot(GetCurrentProcess(), h, GetCurrentProcess(), &handle, PSS_DUPLICATE_NONE);
+				}
+
+				unique_process_snapshot &operator =(unique_process_snapshot &&o) noexcept
+				{
+					if (this != &o)
+						std::swap(handle, o.handle);
+					return *this;
+				}
+			};
+
+			inline unique_process_snapshot create_process_snapshot()
+			{
+				const PSS_CAPTURE_FLAGS CaptureFlags = 
+					PSS_CAPTURE_VA_CLONE | PSS_CAPTURE_VA_SPACE | PSS_CAPTURE_VA_SPACE_SECTION_INFORMATION |
+					PSS_CAPTURE_HANDLES |
+					PSS_CAPTURE_HANDLE_NAME_INFORMATION |
+					PSS_CAPTURE_HANDLE_BASIC_INFORMATION |
+					PSS_CAPTURE_HANDLE_TYPE_SPECIFIC_INFORMATION |
+					PSS_CAPTURE_HANDLE_TRACE |
+					PSS_CAPTURE_THREADS |
+					PSS_CAPTURE_THREAD_CONTEXT |
+					PSS_CAPTURE_THREAD_CONTEXT_EXTENDED
+					;
+
+				HPSS SnapshotHandle;
+				if (DWORD dwResultCode = PssCaptureSnapshot(GetCurrentProcess(), CaptureFlags, CONTEXT_ALL, &SnapshotHandle); ERROR_SUCCESS == dwResultCode)
+					return unique_process_snapshot{ SnapshotHandle };
+				else
+					return {};
+			}
+
+			class __declspec(empty_bases)snapshot
+			{
+				unique_process_snapshot handle{ create_process_snapshot() };
+			protected:
+				std::wstring append_trace(std::wstring_view message) const
+				{
+					namespace fs = std::filesystem;
+					auto path = fs::temp_directory_path() / (std::to_wstring(std::chrono::system_clock::now().time_since_epoch().count()) + L".dmp"s);
+
+					if (wil::unique_hfile file{CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)})
+					{
+						MINIDUMP_CALLBACK_INFORMATION CallbackInfo{};
+						CallbackInfo.CallbackRoutine = [](PVOID, const PMINIDUMP_CALLBACK_INPUT CallbackInput, PMINIDUMP_CALLBACK_OUTPUT CallbackOutput) -> BOOL
+						{
+							switch (CallbackInput->CallbackType)
+							{
+							case 16: // IsProcessSnapshotCallback
+								CallbackOutput->Status = S_FALSE;
+								break;
+							}
+							return true;
+						};
+
+						if (MiniDumpWriteDump(handle.get(), GetCurrentProcessId(), file.get(),
+							static_cast<MINIDUMP_TYPE>(
+								MiniDumpWithUnloadedModules | 
+								MiniDumpWithHandleData | 
+								MiniDumpWithProcessThreadData | 
+								MiniDumpWithFullMemory | 
+								MiniDumpIgnoreInaccessibleMemory
+								),
+							nullptr, nullptr, &CallbackInfo))
+
+							return std::wstring{message} + L" (dump "s + path.native() + L")"s;
+					}
+
+					return std::wstring{message};
+				}
+			};
+#endif
+		}
+
+		template<class Base>
+		class __declspec(empty_bases) hresult_error_impl : public Base
 		{
 			HRESULT m_code{ E_FAIL };
 
 		public:
-			constexpr hresult_error() = default;
+			constexpr hresult_error_impl() = default;
 
-			explicit constexpr hresult_error(const HRESULT code) noexcept :
+			explicit constexpr hresult_error_impl(const HRESULT code) noexcept :
 				m_code{ code }
 			{
 			}
 
-			static hresult_error last_error() noexcept
+			static hresult_error_impl last_error() noexcept
 			{
-				return hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
+				return hresult_error_impl{ HRESULT_FROM_WIN32(GetLastError()) };
 			}
 
 			constexpr HRESULT code() const noexcept
@@ -68,6 +256,11 @@ namespace corsl
 			constexpr bool is_aborted() const noexcept
 			{
 				return m_code == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
+			}
+
+			constexpr bool is_cancelled() const noexcept
+			{
+				return m_code == HRESULT_FROM_WIN32(ERROR_CANCELLED);
 			}
 
 			std::wstring message() const noexcept
@@ -87,7 +280,8 @@ namespace corsl
 					error.remove_prefix(pos);
 				if (auto pos = error.find_last_not_of(L" \t\r\n"sv); pos != std::wstring_view::npos)
 					error.remove_suffix(error.size() - pos - 1);
-				return std::wstring{ error };
+
+				return this->append_trace(error);
 			}
 
 			std::u8string u8message() const noexcept
@@ -101,11 +295,19 @@ namespace corsl
 			}
 		};
 
+#if CORSL_RICH_ERRORS == SNAPSHOT
+		using hresult_error = hresult_error_impl<bases::snapshot>;
+#elif CORSL_RICH_ERRORS == STACKTRACE
+		using hresult_error = hresult_error_impl<bases::stacktrace>;
+#else
+		using hresult_error = hresult_error_impl<bases::empty>;
+#endif
+
 		// Class is used by lightweight cancellation support
 		class operation_cancelled : public hresult_error
 		{
 		public:
-			operation_cancelled() noexcept :
+			constexpr operation_cancelled() noexcept :
 				hresult_error{ HRESULT_FROM_WIN32(ERROR_CANCELLED) }
 			{}
 		};
@@ -169,7 +371,14 @@ namespace corsl
 		};
 	}
 
+	using hresult_fast_error = details::hresult_error_impl<details::bases::empty>;
+	using hresult_traced_error = details::hresult_error_impl<details::bases::stacktrace>;
+#if !defined(CORSL_NO_SNAPSHOTS)
+	using hresult_snapshot_error = details::hresult_error_impl<details::bases::snapshot>;
+#endif
+
 	using details::hresult_error;
+
 	using details::operation_cancelled;
 	using details::timer_cancelled;
 
