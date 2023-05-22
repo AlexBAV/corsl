@@ -12,6 +12,9 @@
 #include <stacktrace>
 
 // optionally define CORSL_NO_SNAPSHOTS to disable snapshot
+// optionally define CORSL_RICH_ERRORS to one of the NONE, STACKTRACE or SNAPSHOT
+// defaults: DEBUG = SNAPSHOT (or STACKTRACE)
+//              RELEASE = NONE
 
 #if !defined(CORSL_RICH_ERRORS)
 #	if defined(_DEBUG) && !defined(CORSL_NO_SNAPSHOTS)
@@ -80,16 +83,16 @@ namespace corsl
 
 		namespace bases
 		{
-			class __declspec(empty_bases)empty
+			class empty
 			{
 			protected:
-				static std::wstring append_trace(std::wstring_view text)
+				static std::wstring &&append_trace(std::wstring &&text)
 				{
-					return std::wstring{text};
+					return std::move(text);
 				}
 			};
 
-			class __declspec(empty_bases)stacktrace
+			class stacktrace
 			{
 				std::stacktrace trace{std::stacktrace::current(2)};	// skip this object constructor
 
@@ -143,6 +146,8 @@ namespace corsl
 				{
 					if (o.handle)
 						PssDuplicateSnapshot(GetCurrentProcess(), o.handle, GetCurrentProcess(), &handle, PSS_DUPLICATE_NONE);
+					else
+						handle = nullptr;
 				}
 
 				unique_process_snapshot &operator =(const unique_process_snapshot &o) noexcept
@@ -157,6 +162,8 @@ namespace corsl
 				{
 					if (auto h = std::exchange(o.handle, nullptr))
 						PssDuplicateSnapshot(GetCurrentProcess(), h, GetCurrentProcess(), &handle, PSS_DUPLICATE_NONE);
+					else
+						handle = nullptr;
 				}
 
 				unique_process_snapshot &operator =(unique_process_snapshot &&o) noexcept
@@ -188,7 +195,7 @@ namespace corsl
 					return {};
 			}
 
-			class __declspec(empty_bases)snapshot
+			class snapshot
 			{
 				unique_process_snapshot handle{ create_process_snapshot() };
 			protected:
@@ -230,35 +237,38 @@ namespace corsl
 #endif
 		}
 
-		template<class Base>
-		class __declspec(empty_bases) hresult_error_impl : public Base
+		template<class T>
+		concept error_class = 
+			std::default_initializable<T> &&
+			std::movable<T> && 
+			requires(const T & ec)
+		{
+			{ec.message()} -> std::same_as<std::wstring>;
+		};
+
+		class hresult_error_impl
 		{
 			HRESULT m_code{ E_FAIL };
 
 		public:
-			constexpr hresult_error_impl() = default;
+			hresult_error_impl() = default;
 
-			explicit constexpr hresult_error_impl(const HRESULT code) noexcept :
+			explicit hresult_error_impl(const HRESULT code) noexcept :
 				m_code{ code }
 			{
 			}
 
-			static hresult_error_impl last_error() noexcept
-			{
-				return hresult_error_impl{ HRESULT_FROM_WIN32(GetLastError()) };
-			}
-
-			constexpr HRESULT code() const noexcept
+			HRESULT code() const noexcept
 			{
 				return m_code;
 			}
 
-			constexpr bool is_aborted() const noexcept
+			bool is_aborted() const noexcept
 			{
 				return m_code == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
 			}
 
-			constexpr bool is_cancelled() const noexcept
+			bool is_cancelled() const noexcept
 			{
 				return m_code == HRESULT_FROM_WIN32(ERROR_CANCELLED);
 			}
@@ -270,7 +280,7 @@ namespace corsl
 				const uint32_t size = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 					nullptr,
 					m_code,
-					0,//MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+					0,
 					reinterpret_cast<wchar_t *>(winrt::put_abi(message)),
 					0,
 					nullptr);
@@ -281,33 +291,55 @@ namespace corsl
 				if (auto pos = error.find_last_not_of(L" \t\r\n"sv); pos != std::wstring_view::npos)
 					error.remove_suffix(error.size() - pos - 1);
 
-				return this->append_trace(error);
+				return std::wstring {error};
+			}
+		};
+
+		template<error_class E, class Base>
+		class __declspec(empty_bases)traceable_error : public Base, public E
+		{
+		public:
+//			constexpr traceable_error() = default;
+
+			using E::E;
+
+			std::wstring trace() const noexcept
+			{
+				return this->append_trace(this->message());
 			}
 
 			std::u8string u8message() const noexcept
 			{
-				return w_to_u8(message());
+				return w_to_u8(this->message());
 			}
 
 			std::string utf8message() const noexcept
 			{
-				return w_to_utf8(message());
+				return w_to_utf8(this->message());
 			}
 		};
 
+		//static_assert(sizeof(hresult_error_impl<bases::empty>) == sizeof(HRESULT));
+
 #if CORSL_RICH_ERRORS == SNAPSHOT
-		using hresult_error = hresult_error_impl<bases::snapshot>;
+		using hresult_error = traceable_error<hresult_error_impl, bases::snapshot>;
 #elif CORSL_RICH_ERRORS == STACKTRACE
-		using hresult_error = hresult_error_impl<bases::stacktrace>;
+		using hresult_error = traceable_error<hresult_error_impl, bases::stacktrace>;
 #else
-		using hresult_error = hresult_error_impl<bases::empty>;
+		using hresult_error = traceable_error<hresult_error_impl, bases::empty>;
+#endif
+
+		using hresult_fast_error = traceable_error<hresult_error_impl, bases::empty>;
+		using hresult_traced_error = traceable_error<hresult_error_impl, bases::stacktrace>;
+#if !defined(CORSL_NO_SNAPSHOTS)
+		using hresult_snapshot_error = traceable_error<hresult_error_impl, bases::snapshot>;
 #endif
 
 		// Class is used by lightweight cancellation support
 		class operation_cancelled : public hresult_error
 		{
 		public:
-			constexpr operation_cancelled() noexcept :
+			operation_cancelled() noexcept :
 				hresult_error{ HRESULT_FROM_WIN32(ERROR_CANCELLED) }
 			{}
 		};
@@ -357,13 +389,13 @@ namespace corsl
 
 		inline auto last_error() noexcept
 		{
-			return hresult_error::last_error();
+			return hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
 		}
 
 		inline void check_win32_api(BOOL res)
 		{
 			if (!res) [[unlikely]]
-				throw hresult_error{ HRESULT_FROM_WIN32(GetLastError()) };
+				throw last_error();
 		}
 
 		class timer_cancelled : public operation_cancelled
@@ -371,13 +403,15 @@ namespace corsl
 		};
 	}
 
-	using hresult_fast_error = details::hresult_error_impl<details::bases::empty>;
-	using hresult_traced_error = details::hresult_error_impl<details::bases::stacktrace>;
-#if !defined(CORSL_NO_SNAPSHOTS)
-	using hresult_snapshot_error = details::hresult_error_impl<details::bases::snapshot>;
-#endif
+	using details::error_class;
+	using details::traceable_error;
 
 	using details::hresult_error;
+	using details::hresult_fast_error;
+	using details::hresult_traced_error;
+#if !defined(CORSL_NO_SNAPSHOTS)
+	using details::hresult_snapshot_error;
+#endif
 
 	using details::operation_cancelled;
 	using details::timer_cancelled;
