@@ -12,17 +12,21 @@
 #include <stacktrace>
 
 // optionally define CORSL_NO_SNAPSHOTS to disable snapshot
-// optionally define CORSL_RICH_ERRORS to one of the NONE, STACKTRACE or SNAPSHOT
-// defaults: DEBUG = SNAPSHOT (or STACKTRACE)
-//              RELEASE = NONE
+// optionally define CORSL_RICH_ERRORS to one of the CORSL_RICH_NONE, CORSL_RICH_STACKTRACE or CORSL_RICH_SNAPSHOT
+// defaults: DEBUG = CORSL_RICH_SNAPSHOT (or CORSL_RICH_STACKTRACE)
+//              RELEASE = CORSL_RICH_NONE
+
+#define CORSL_RICH_NONE 0
+#define CORSL_RICH_STACKTRACE 1
+#define CORSL_RICH_SNAPSHOT 2
 
 #if !defined(CORSL_RICH_ERRORS)
 #	if defined(_DEBUG) && !defined(CORSL_NO_SNAPSHOTS)
-#		define CORSL_RICH_ERRORS SNAPSHOT
+#		define CORSL_RICH_ERRORS CORSL_RICH_SNAPSHOT
 #	elif defined(_DEBUG) && defined(CORSL_NO_SNAPSHOTS)
-#		define CORSL_RICH_ERRORS STACKTRACE
+#		define CORSL_RICH_ERRORS CORSL_RICH_STACKTRACE
 #	else
-#		define CORSL_RICH_ERRORS NONE
+#		define CORSL_RICH_ERRORS CORSL_RICH_NONE
 #	endif
 #endif
 
@@ -30,6 +34,7 @@
 #	include <filesystem>
 #	include <processsnapshot.h>
 #	include <Dbghelp.h>
+#	include <wil/resource.h>
 
 #	pragma comment(lib,"Dbghelp.lib")
 #endif
@@ -321,9 +326,9 @@ namespace corsl
 
 		//static_assert(sizeof(hresult_error_impl<bases::empty>) == sizeof(HRESULT));
 
-#if CORSL_RICH_ERRORS == SNAPSHOT
+#if CORSL_RICH_ERRORS == CORSL_RICH_SNAPSHOT
 		using hresult_error = traceable_error<hresult_error_impl, bases::snapshot>;
-#elif CORSL_RICH_ERRORS == STACKTRACE
+#elif CORSL_RICH_ERRORS == CORSL_RICH_STACKTRACE
 		using hresult_error = traceable_error<hresult_error_impl, bases::stacktrace>;
 #else
 		using hresult_error = traceable_error<hresult_error_impl, bases::empty>;
