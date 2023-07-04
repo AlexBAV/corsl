@@ -178,7 +178,7 @@ namespace corsl
 			[[nodiscard]]
 			bool empty() const noexcept
 			{
-				std::scoped_lock<srwlock> l{ queue_lock };
+				std::shared_lock l{ queue_lock };
 				return queue.empty();
 			}
 

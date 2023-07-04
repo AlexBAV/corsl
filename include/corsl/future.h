@@ -25,17 +25,17 @@ namespace corsl
 		template<class value_type>
 		struct __declspec(empty_bases)promise_common : promise_base0
 		{
-			srwlock lock;
+			mutex lock;
 			std::variant<std::monostate, std::exception_ptr, value_type> value;
 			std::coroutine_handle<> resume{};
 			std::atomic<int> use_count{ 0 };
 
-			bool is_ready(std::unique_lock<srwlock> &) const noexcept
+			bool is_ready(std::unique_lock<mutex> &) const noexcept
 			{
 				return value.index() != 0;
 			}
 
-			void check_resume(std::unique_lock<srwlock> &&l) noexcept
+			void check_resume(std::unique_lock<mutex> &&l) noexcept
 			{
 				if (resume)
 				{
@@ -46,15 +46,13 @@ namespace corsl
 
 			void internal_set_exception(std::exception_ptr &&exception) noexcept
 			{
-				//std::unique_lock<srwlock> l{ lock };
 				lock.lock();	// will be released in final_suspend
 				value = std::move(exception);
-				//check_resume(std::move(l));
 			}
 
 			fire_and_forget<> internal_set_exception_async(std::exception_ptr &&exception) noexcept
 			{
-				std::unique_lock<srwlock> l{ lock };
+				std::unique_lock<mutex> l{ lock };
 				value = std::move(exception);
 				co_await resume_background();
 				check_resume(std::move(l));
@@ -62,10 +60,8 @@ namespace corsl
 
 			void unhandled_exception() noexcept
 			{
-				//std::unique_lock<srwlock> l{ lock };
 				lock.lock();	// will be released in final_suspend
 				value = std::current_exception();
-				//check_resume(std::move(l));
 			}
 
 			void check_exception()
@@ -88,10 +84,8 @@ namespace corsl
 			template<class V>
 			void return_value(V &&v) noexcept
 			{
-				//std::unique_lock l{ this->lock };
 				this->lock.lock();	// will be released in final_suspend
 				this->value = std::forward<V>(v);
-				//this->check_resume(std::move(l));
 			}
 
 			future<> return_value_async(T v) noexcept;
@@ -106,7 +100,6 @@ namespace corsl
 			{
 				lock.lock();	// will be released in final_suspend::await_ready
 				value = empty_type{};
-				//check_resume(std::move(l));
 			}
 
 			future<> return_void_async() noexcept;
@@ -144,7 +137,7 @@ namespace corsl
 			bool future_exists{ true };
 
 			//
-			bool start_async(std::coroutine_handle<> resume_, std::unique_lock<srwlock> &&l) noexcept
+			bool start_async(std::coroutine_handle<> resume_, std::unique_lock<mutex> &&l) noexcept
 			{
 				if (this->is_ready(l))
 					return false;	// we already have a result
@@ -164,7 +157,6 @@ namespace corsl
 
 				bool await_ready() const noexcept
 				{
-					//assert(pthis->lock.owns_lock());// lock();
 					auto is_ready = !pthis->future_exists;
 					if (is_ready)
 					{
@@ -263,7 +255,7 @@ namespace corsl
 
 				bool await_ready() const noexcept
 				{
-					std::unique_lock<srwlock> l{ coro.promise().lock };
+					std::unique_lock<mutex> l{ coro.promise().lock };
 					auto ready = coro.promise().is_ready(l);
 					if (!ready)
 						l.release();
@@ -272,7 +264,7 @@ namespace corsl
 
 				bool await_suspend(std::coroutine_handle<> resume) noexcept
 				{
-					std::unique_lock<srwlock> l{ coro.promise().lock, std::adopt_lock };
+					std::unique_lock<mutex> l{ coro.promise().lock, std::adopt_lock };
 					return coro.promise().start_async(resume, std::move(l));
 				}
 
@@ -356,7 +348,7 @@ namespace corsl
 			bool is_ready() const noexcept
 			{
 				assert(coro && "Calling is_ready for uninitialized future is invalid");
-				std::unique_lock<srwlock> l{ coro.promise().lock };
+				std::unique_lock<mutex> l{ coro.promise().lock };
 				return coro.promise().is_ready(l);
 			}
 
@@ -364,7 +356,7 @@ namespace corsl
 			bool await_ready() const noexcept
 			{
 				assert(coro && "co_await with uninitialized future is invalid");
-				std::unique_lock<srwlock> l{ coro.promise().lock };
+				std::unique_lock<mutex> l{ coro.promise().lock };
 				auto ready = coro.promise().is_ready(l);
 				if (!ready)
 					l.release();
@@ -373,7 +365,7 @@ namespace corsl
 
 			bool await_suspend(std::coroutine_handle<> resume) noexcept
 			{
-				std::unique_lock<srwlock> l{ coro.promise().lock, std::adopt_lock };
+				std::unique_lock<mutex> l{ coro.promise().lock, std::adopt_lock };
 				return coro.promise().start_async(resume, std::move(l));
 			}
 
@@ -414,7 +406,7 @@ namespace corsl
 
 		inline future<> promise_base<void>::return_void_async() noexcept
 		{
-			std::unique_lock<srwlock> l{ lock };
+			std::unique_lock<mutex> l{ lock };
 			value = empty_type{};
 			co_await resume_background();
 			check_resume(std::move(l));

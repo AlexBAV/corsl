@@ -104,8 +104,30 @@ namespace corsl
 				WakeAllConditionVariable(&m_cv);
 			}
 		};
+
+		class mutex
+		{
+			std::binary_semaphore sema {1};
+
+		public:
+			void lock() noexcept
+			{
+				sema.acquire();
+			}
+
+			bool try_lock() noexcept
+			{
+				return sema.try_acquire();
+			}
+
+			void unlock() noexcept
+			{
+				sema.release();
+			}
+		};
 	}
 
 	using details::srwlock;
 	using details::condition_variable;
+	using details::mutex;
 }
