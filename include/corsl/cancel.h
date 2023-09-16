@@ -31,6 +31,10 @@ namespace corsl
 		class cancellation_subscription;
 		struct cancellation_token_transport;
 
+#if defined(__INTELLISENSE__)
+		class cancellation_token;
+#endif
+
 		class cancellation_subscription_base : public bi::list_base_hook<>
 		{
 			friend class cancellation_token;
