@@ -35,7 +35,7 @@ namespace corsl
 			//}
 
 			template<class A, class V>
-			void iset_async(V &&v) noexcept requires !std::same_as<void, A>
+			void iset_async(V &&v) noexcept requires (!std::same_as<void, A>)
 			{
 				promise_->return_value_async(std::forward<V>(v));
 			}
