@@ -337,7 +337,7 @@ namespace corsl
 				{
 					awaitable(PTP_IO io, F &&callback) noexcept :
 						m_io{ io },
-						F{ std::move(callback) }
+						F(std::move(callback))
 					{}
 
 					bool await_ready() const noexcept
@@ -382,7 +382,7 @@ namespace corsl
 				{
 					awaitable(PTP_IO io, F &&callback) noexcept :
 						m_io{ io },
-						F{ std::move(callback) }
+						F(std::move(callback))
 					{}
 
 					bool await_ready() const noexcept
