@@ -41,6 +41,12 @@ namespace corsl
 				return 0 != TryAcquireSRWLockExclusive(&m_lock);
 			}
 
+			_When_(return, _Acquires_shared_lock_(&m_lock))
+			bool try_lock_shared() noexcept
+			{
+				return 0 != TryAcquireSRWLockShared(&m_lock);
+			}
+
 			_Releases_exclusive_lock_(&m_lock)
 			void unlock() noexcept
 			{
