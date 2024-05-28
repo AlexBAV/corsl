@@ -24,7 +24,6 @@
 #include <variant>
 #include <concepts>
 #include <ranges>
-#include <variant>
 #include <semaphore>
 
 #include <winrt/base.h>
