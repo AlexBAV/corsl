@@ -37,10 +37,10 @@ namespace corsl
 
 			void check_resume(std::unique_lock<mutex> &&l) noexcept
 			{
-				if (resume)
+				if (auto resume_ = std::exchange(resume, std::coroutine_handle<>{}))
 				{
 					l.unlock();
-					resume();
+					resume_();
 				}
 			}
 
