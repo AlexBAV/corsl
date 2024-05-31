@@ -16,12 +16,15 @@
 #include "compatible_base.h"
 
 #include <shared_mutex>
-#include <list>
+
+#include <boost/intrusive/list.hpp>
 
 namespace corsl
 {
 	namespace details
 	{
+		namespace bi = boost::intrusive;
+
 		class cancellation_source_body;
 		class cancellation_source;
 		template<class F>
@@ -32,7 +35,7 @@ namespace corsl
 		class cancellation_token;
 #endif
 
-		class cancellation_subscription_base
+		class cancellation_subscription_base : public bi::list_base_hook<>
 		{
 			friend class cancellation_token;
 
@@ -42,7 +45,7 @@ namespace corsl
 				token{ token }
 			{}
 
-			virtual ~cancellation_subscription_base() = default;
+			~cancellation_subscription_base() = default;
 
 			cancellation_subscription_base(const cancellation_subscription_base &) = delete;
 			cancellation_subscription_base &operator =(const cancellation_subscription_base &) = delete;
@@ -87,7 +90,7 @@ namespace corsl
 			}
 		};
 
-		class cancellation_token
+		class cancellation_token : public bi::list_base_hook<>
 		{
 			friend class cancellation_source_body;
 			friend class cancellation_subscription_base;
@@ -95,38 +98,33 @@ namespace corsl
 			std::shared_ptr<cancellation_source_body> body;
 			std::coroutine_handle<promise_base0> coro{};	// associated promise
 
-			mutex lock;
-			std::list<cancellation_subscription_base *> callbacks;
+			srwlock lock;
+			bi::list<cancellation_subscription_base, bi::constant_time_size<false>> callbacks;
 
-			bool cancelled{};
+			bool cancelled;
 
 			//
 			void cancel()
 			{
-				std::list<cancellation_subscription_base *> callbacks_;
+				std::lock_guard<srwlock> l{ lock };
+				cancelled = true;
+				if (coro)
+					coro.promise().cancel();
 
-				if (std::scoped_lock l{ lock }; !cancelled)
-				{
-					cancelled = true;
-					if (coro)
-						coro.promise().cancel();
-					std::swap(callbacks, callbacks_);
-				}
-
-				for (auto *callback : callbacks_)
-					callback->run();
+				for (auto &pair : callbacks)
+					pair.run();
 			}
 
 			void add_subscription(cancellation_subscription_base &callback) noexcept
 			{
-				std::scoped_lock l{ lock };
-				callbacks.push_front(&callback);
+				std::lock_guard<srwlock> l{ lock };
+				callbacks.push_front(callback);
 			}
 
 			void remove_subscription(cancellation_subscription_base &callback) noexcept
 			{
-				std::scoped_lock l{ lock };
-				std::erase(callbacks, &callback);
+				std::lock_guard<srwlock> l{ lock };
+				callbacks.erase(callbacks.s_iterator_to(callback));
 			}
 
 		public:
@@ -205,54 +203,50 @@ namespace corsl
 			friend class cancellation_source;
 
 			mutable srwlock lock;
-			std::list<cancellation_token *> tokens;
+			bi::list<cancellation_token, bi::constant_time_size<false>> tokens;
 			std::vector<std::weak_ptr<cancellation_source_body>> related_sources;
 			bool cancelled{ false };
 
 			void add_token(cancellation_token &token) noexcept
 			{
-				std::scoped_lock l{ lock };
-				tokens.push_back(&token);
+				std::lock_guard<srwlock> l{ lock };
+				tokens.push_back(token);
 			}
 
 			void remove_token(cancellation_token &token) noexcept
 			{
-				std::scoped_lock l{ lock };
-				std::erase(tokens, &token);
+				std::lock_guard<srwlock> l{ lock };
+				tokens.erase(tokens.s_iterator_to(token));
 			}
 
-			void add_related(const std::shared_ptr<cancellation_source_body> &related)
+			void add_related(std::shared_ptr<cancellation_source_body> &related)
 			{
-				std::scoped_lock l{ lock };
+				std::lock_guard<srwlock> l{ lock };
 				related_sources.emplace_back(related);
 			}
 
 		public:
 			bool is_cancelled() const noexcept
 			{
-				std::shared_lock l{ lock };
+				std::shared_lock<srwlock> l{ lock };
 				return cancelled;
 			}
 
 			void cancel() noexcept
 			{
-				std::list<cancellation_token *> tokens_;
-				std::vector<std::weak_ptr<cancellation_source_body>> related_sources_;
-
-				if (std::scoped_lock l{ lock }; !cancelled)
+				std::lock_guard<srwlock> l{ lock };
+				if (!cancelled)
 				{
 					cancelled = true;
-					std::swap(tokens, tokens_);
-					std::swap(related_sources, related_sources_);
-				}
-
-				for (auto *token : tokens_)
-					token->cancel();
-				for (auto &related : related_sources_)
-				{
-					auto pr = related.lock();
-					if (pr)
-						pr->cancel();
+					for (auto &token : tokens)
+						token.cancel();
+					for (auto &related : related_sources)
+					{
+						auto pr = related.lock();
+						if (pr)
+							pr->cancel();
+					}
+					related_sources.clear();
 				}
 			}
 		};
