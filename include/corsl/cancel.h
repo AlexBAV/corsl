@@ -129,6 +129,7 @@ namespace corsl
 
 		public:
 			cancellation_token(cancellation_token_transport &&transport);
+			cancellation_token(const cancellation_source &source);
 			~cancellation_token();
 
 			cancellation_token(const cancellation_token &) = delete;
@@ -289,6 +290,14 @@ namespace corsl
 			coro{ transport.coro }
 		{
 			// Throw immediately if source is already cancelled
+			check_cancelled();
+			body->add_token(*this);
+		}
+
+		inline cancellation_token::cancellation_token(const cancellation_source &source) :
+			body{ source.body },
+			cancelled{ body->is_cancelled() }
+		{
 			check_cancelled();
 			body->add_token(*this);
 		}
